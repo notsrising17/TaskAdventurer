@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TaskAdventurer</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  /* =============================================
+     RESET & BASE
+     ============================================= */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sky1:   #5b8dd9;
+    --sky2:   #9bbff4;
+    --ground1:#6b4226;
+    --ground2:#8b5e3c;
+    --path1:  #c8a96e;
+    --path2:  #e0c97f;
+    --grass1: #3a7d44;
+    --grass2: #4e9e5a;
+    --ui-bg:  #1a0e2e;
+    --ui-border:#7b5ea7;
+    --ui-text:#f0e6ff;
+    --ui-accent:#ffd700;
+    --hp-green:#4caf50;
+    --hp-red:  #e53935;
+    --pixel:   1px;
+  }
+
+  html, body {
+    width: 100%; min-height: 100vh;
+    background: var(--ui-bg);
+    color: var(--ui-text);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    -webkit-font-smoothing: none;
+    image-rendering: pixelated;
+    overflow-x: hidden;
+  }
+
+  /* =============================================
+     SCENE CANVAS WRAPPER
+     ============================================= */
+  #scene-wrap {
+    width: 100%;
+    position: relative;
+    background: var(--sky1);
+    overflow: hidden;
+    border-bottom: 4px solid #2a1a4e;
+    /* height set by JS */
+  }
+
+  canvas#scene {
+    display: block;
+    width: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* =============================================
+     PROGRESS BAR
+     ============================================= */
+  #progress-section {
+    padding: 10px 12px 6px;
+    background: #120a22;
+    border-bottom: 3px solid var(--ui-border);
+  }
+  #progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 7px;
+    color: var(--ui-accent);
+    letter-spacing: 0.5px;
+  }
+  #xp-bar-outer {
+    width: 100%;
+    height: 14px;
+    background: #0d0019;
+    border: 2px solid var(--ui-border);
+    position: relative;
+    image-rendering: pixelated;
+  }
+  #xp-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+    transition: width 0.4s steps(20, end);
+    min-width: 0;
+  }
+  #xp-bar-shine {
+    position: absolute;
+    top: 2px; left: 2px; right: 2px;
+    height: 3px;
+    background: rgba(255,255,255,0.18);
+  }
+
+  /* =============================================
+     MAIN CONTAINER
+     ============================================= */
+  #app {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* =============================================
+     ADD TASK
+     ============================================= */
+  #add-section {
+    padding: 12px;
+    background: #1a0e2e;
+    border-bottom: 2px solid var(--ui-border);
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  #task-input {
+    flex: 1;
+    background: #0d0019;
+    border: 2px solid var(--ui-border);
+    color: var(--ui-text);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 8px 10px;
+    outline: none;
+    caret-color: var(--ui-accent);
+    min-width: 0;
+  }
+  #task-input::placeholder { color: #5a4a7a; }
+  #task-input:focus { border-color: var(--ui-accent); }
+
+  #add-btn {
+    background: #5e35b1;
+    border: 2px solid #9575cd;
+    color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s;
+    flex-shrink: 0;
+  }
+  #add-btn:active { background: #4527a0; transform: translateY(1px); }
+
+  /* =============================================
+     TASK LIST
+     ============================================= */
+  #task-list-section {
+    padding: 8px 12px 24px;
+    flex: 1;
+  }
+  #task-list-header {
+    font-size: 7px;
+    color: var(--ui-accent);
+    padding: 8px 0 6px;
+    border-bottom: 1px solid #2a1a4e;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  #task-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: #120a22;
+    border: 2px solid #2a1a4e;
+    padding: 8px 10px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .task-item.age-1 { border-left: 3px solid #ffa726; }
+  .task-item.age-2 { border-left: 3px solid #ef5350; }
+  .task-item.done  { opacity: 0.45; border-left-color: #2a1a4e !important; }
+
+  .task-check {
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: #0d0019;
+    border: 2px solid var(--ui-border);
+    cursor: pointer;
+    position: relative;
+  }
+  .task-check:checked {
+    background: #4caf50;
+    border-color: #4caf50;
+  }
+  .task-check:checked::after {
+    content: '';
+    position: absolute;
+    left: 2px; top: 0px;
+    width: 6px; height: 10px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(40deg);
+  }
+
+  .task-text {
+    flex: 1;
+    font-size: 7px;
+    line-height: 1.6;
+    word-break: break-word;
+    padding-top: 1px;
+  }
+  .task-item.done .task-text { text-decoration: line-through; color: #5a4a7a; }
+
+  .task-age-badge {
+    font-size: 6px;
+    padding: 2px 4px;
+    background: #2a1a4e;
+    color: #9575cd;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .task-item.age-1 .task-age-badge { background: #3e2000; color: #ffa726; }
+  .task-item.age-2 .task-age-badge { background: #3e0000; color: #ef5350; }
+
+  .task-del {
+    background: none;
+    border: none;
+    color: #3a2a5a;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0 2px;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .task-del:hover { color: #ef5350; }
+
+  #empty-msg {
+    text-align: center;
+    color: #3a2a5a;
+    font-size: 7px;
+    padding: 20px 0;
+    line-height: 2;
+  }
+
+  /* =============================================
+     MONSTER WARNING BANNER
+     ============================================= */
+  #warning-banner {
+    display: none;
+    background: #3e0000;
+    border: 2px solid #ef5350;
+    color: #ef5350;
+    font-size: 7px;
+    padding: 7px 12px;
+    text-align: center;
+    animation: blink-border 1s steps(1) infinite;
+  }
+  #warning-banner.show { display: block; }
+  @keyframes blink-border {
+    0%, 100% { border-color: #ef5350; }
+    50%       { border-color: #3e0000; }
+  }
+
+  /* =============================================
+     TOAST NOTIFICATION
+     ============================================= */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1a0e2e;
+    border: 2px solid var(--ui-accent);
+    color: var(--ui-accent);
+    font-size: 7px;
+    padding: 8px 14px;
+    white-space: nowrap;
+    transition: transform 0.3s steps(5, end);
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* =============================================
+     SCROLLBAR
+     ============================================= */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0d0019; }
+  ::-webkit-scrollbar-thumb { background: #3a2a5a; }
+
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- SCENE -->
+  <div id="scene-wrap">
+    <canvas id="scene"></canvas>
+  </div>
+
+  <!-- PROGRESS BAR -->
+  <div id="progress-section">
+    <div id="progress-label">
+      <span id="progress-title">QUEST PROGRESS</span>
+      <span id="progress-pct">0%</span>
+    </div>
+    <div id="xp-bar-outer">
+      <div id="xp-bar-inner" style="width:0%"></div>
+      <div id="xp-bar-shine"></div>
+    </div>
+  </div>
+
+  <!-- WARNING -->
+  <div id="warning-banner">! MONSTERS BLOCK YOUR PATH !</div>
+
+  <!-- ADD TASK -->
+  <div id="add-section">
+    <input type="text" id="task-input" placeholder="New quest..." maxlength="80" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button id="add-btn">+ ADD</button>
+  </div>
+
+  <!-- TASK LIST -->
+  <div id="task-list-section">
+    <div id="task-list-header">
+      <span>ACTIVE QUESTS</span>
+      <span id="task-count">0 tasks</span>
+    </div>
+    <ul id="task-list"></ul>
+    <div id="empty-msg">No quests yet.<br>Add one above to<br>begin your adventure!</div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================================================================
+   TASKLADVENTURER — Main Script
+   ================================================================ */
+
+// ---------------------------------------------------------------
+// STATE
+// ---------------------------------------------------------------
+let tasks = [];
+let heroX = 0;          // 0..1 fractional position on path
+let heroAnim = 0;       // walk frame counter
+let lastFrame = 0;
+let walkTarget = 0;     // target heroX
+let animFrame;
+
+const STORAGE_KEY = 'taskadventurer_v2';
+
+// ---------------------------------------------------------------
+// CANVAS SETUP
+// ---------------------------------------------------------------
+const canvas = document.getElementById('scene');
+const ctx    = canvas.getContext('2d');
+
+const SCENE_H_PX = 200;   // logical pixels
+const SCENE_W_PX = 400;   // logical canvas width (scaled to display)
+
+canvas.width  = SCENE_W_PX;
+canvas.height = SCENE_H_PX;
+
+// Make the canvas fill the container width while staying crisp
+function resizeCanvas() {
+  const wrap = document.getElementById('scene-wrap');
+  const dpr  = window.devicePixelRatio || 1;
+  // CSS display size
+  canvas.style.height = Math.round(wrap.clientWidth * SCENE_H_PX / SCENE_W_PX) + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ---------------------------------------------------------------
+// PIXEL DRAWING HELPERS
+// ---------------------------------------------------------------
+// Each "pixel" in our sprites = 2x2 canvas pixels for crispness
+const P = 2;
+
+function px(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * P, y * P, P, P);
+}
+
+function drawRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * P, y * P, w * P, h * P);
+}
+
+// Draws a sprite from a pixel map (array of strings, '#' = transparent)
+function drawSprite(map, ox, oy, palette) {
+  for (let row = 0; row < map.length; row++) {
+    for (let col = 0; col < map[row].length; col++) {
+      const ch = map[row][col];
+      if (ch === '.' || ch === ' ') continue;
+      const color = palette[ch];
+      if (color) px(ox + col, oy + row, color);
+    }
+  }
+}
+
+// ---------------------------------------------------------------
+// SPRITE DEFINITIONS
+// ---------------------------------------------------------------
+
+// Hero — 10x16 px, two walk frames
+const HERO_PAL = {
+  H: '#f5c5a3', // skin
+  h: '#d4956a', // dark skin
+  K: '#c0c0c0', // armor light
+  k: '#808080', // armor dark
+  S: '#4169e1', // shield/blue
+  s: '#1e3faa', // shield dark
+  G: '#ffd700', // gold trim
+  B: '#4a3000', // boots/belt
+  R: '#cc2200', // cape
+  r: '#991a00', // cape dark
+  E: '#222222', // eye
+  W: '#ffffff', // white
+};
+
+const HERO_FRAME0 = [
+  '..GKKG..',
+  '.KHHHHK.',
+  '.KHEHEK.',
+  '.KHHHHK.',
+  'GKKKKKKKG',
+  '.RSSKSSR.',
+  '.RsKKKsR.',
+  'RRsKKKsRR',
+  '.RRsssRR.',
+  '..BRRB..',
+  '..BRRB..',
+  '.BkRRkB.',
+  '.kBBBBk.',
+  '.k....k.',
+  'Bk....kB',
+  'B......B',
+];
+
+const HERO_FRAME1 = [
+  '..GKKG..',
+  '.KHHHHK.',
+  '.KHEHEK.',
+  '.KHHHHK.',
+  'GKKKKKKKG',
+  '.RSSKSSR.',
+  '.RsKKKsR.',
+  'RRsKKKsRR',
+  '.RRsssRR.',
+  '..BRRB..',
+  '.BRRRRB.',
+  'BkRRRRkB',
+  '.kBBBBk.',
+  'Bk....kB',
+  '.k....k.',
+  '........',
+];
+
+// Castle — 28x20 px
+const CASTLE_PAL = {
+  W: '#e8dcc8', // wall light
+  w: '#c4b49a', // wall mid
+  d: '#8c7458', // wall dark
+  M: '#8b7355', // mortar
+  G: '#ffd700', // gold
+  g: '#ccaa00', // gold dark
+  B: '#1a0a2e', // window black
+  T: '#7b3f00', // tower
+  t: '#5a2e00', // tower dark
+  F: '#e83030', // flag
+  f: '#aa1a1a', // flag dark
+  P: '#6b8cba', // portcullis
+  p: '#3a5a8a', // portcullis dark
+  R: '#4e3a22', // roof/battlement
+};
+
+const CASTLE_MAP = [
+  '....R.R..RRR..R.R....',
+  '...RRR..RRRRR..RRR...',
+  '...RwR..RwwwR..RwR...',
+  '...RwRRRwwwwwRRRwR...',
+  '..RRwwwwwWWWwwwwwRR..',
+  '..RwwwWWWWWWWWWwwwR..',
+  '..RwWWWWWWWWWWWWWwR..',
+  '..RwWWWBWWWWWBWWWwR..',
+  '..RwWWWBWWWWWBWWWwR..',
+  '..RwWWWWWWWWWWWWWwR..',
+  '..RwwwwwwwwwwwwwwwR..',
+  '..RwwwwwwpPpwwwwwwR..',
+  '..RwwwwwwPPPwwwwwwR..',
+  '..RwwwwwwPPPwwwwwwR..',
+  '..RdddddddddddddddR..',
+  '..Rdddddddddddddd dR..',
+  '..RMMdMMdMMdMMdMMdR..',
+  '...ddddddddddddddd...',
+  '....dMMMMMMMMMMMMd...',
+  '....dddddddddddddd...',
+];
+
+// Flag on top
+const FLAG_MAP = [
+  'F.',
+  'FF',
+  'fF',
+  'f.',
+];
+
+// Slime monster — 10x8
+const SLIME_PAL = {
+  G: '#44cc44', // body
+  g: '#228822', // dark body
+  D: '#2a7a2a', // darkest
+  E: '#111111', // eye
+  W: '#ffffff', // white
+  H: '#66ee66', // highlight
+};
+
+const SLIME_MAP = [
+  '..HGGGG..',
+  '.GGGGGGG.',
+  'GgGGGGGgG',
+  'GgGEEGgGG',  // eyes
+  'GgGWWGgGG',
+  '.GGGGGGG.',
+  '..DDDDD..',
+  '...DDD...',
+];
+
+// Big demon — 12x14
+const DEMON_PAL = {
+  R: '#cc2200', // body
+  r: '#881500', // dark body
+  D: '#550d00', // darkest
+  H: '#ff6644', // highlight
+  E: '#ffff00', // eye
+  e: '#cc9900', // eye dark
+  W: '#f5c5a3', // fang white
+  B: '#111111', // black
+  P: '#aa00cc', // wing
+  p: '#770099', // wing dark
+};
+
+const DEMON_MAP = [
+  '....RRRR....',
+  '...RHHHRR...',
+  'p.RRHRRHRR.P',
+  'pPRRREERRRPp',
+  'pPRRRBBRRRPp',
+  '.PRRrrrRRRP.',
+  '.PRRrWrRRRP.',
+  '..RRRrRRRR..',
+  '..DRRrRRRD..',
+  '..DRRRrRRD..',
+  '...DRRRRRD..',
+  '....DDRRDD..',
+  '.....DRRR...',
+  '......DD....',
+];
+
+// Boulder — 10x8
+const BOULDER_PAL = {
+  G: '#888888',
+  g: '#666666',
+  d: '#444444',
+  H: '#aaaaaa',
+  B: '#333333',
+};
+
+const BOULDER_MAP = [
+  '..HHHGG..',
+  '.HGGGGGg.',
+  'HGGGGGGgd',
+  'GGGGGGgdd',
+  'GgGGGgddd',
+  'gGgGgdddd',
+  '.gGgddddd',
+  '..Bddddd.',
+];
+
+// Tree — 6x10
+const TREE_PAL = {
+  G: '#2d7a2d',
+  g: '#1a5c1a',
+  d: '#0f3d0f',
+  B: '#5c3a1e',
+  b: '#3a2210',
+};
+
+const TREE_MAP = [
+  '..dGd.',
+  '.dGGGd',
+  'dGGGGGd',  // 7 wide
+  '.dGGGd',
+  '..dGd.',
+  '..GGG.',
+  '...B..',
+  '...B..',
+  '..bBb.',
+  '..bbb.',
+];
+
+// ---------------------------------------------------------------
+// SCENE DRAWING
+// ---------------------------------------------------------------
+const SKY_TOP    = 0;
+const SKY_BOTTOM = 68;  // logical pixels
+const GROUND_TOP = 68;
+const PATH_Y     = 76;
+const PATH_H     = 14;
+const HORIZON    = 68;
+
+// static background elements
+const TREES = [
+  { x: 10, frame: 0 },
+  { x: 35, frame: 2 },
+  { x: 55, frame: 1 },
+  { x: 130, frame: 0 },
+  { x: 160, frame: 1 },
+];
+
+// cloud positions (logical px)
+const CLOUDS = [
+  { x: 20,  y: 8,  w: 22, h: 8 },
+  { x: 80,  y: 12, w: 18, h: 7 },
+  { x: 140, y: 6,  w: 28, h: 9 },
+];
+
+let cloudOffset = 0; // slowly scrolls
+
+function drawBackground() {
+  // Sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, HORIZON * P);
+  grad.addColorStop(0,   '#2a5298');
+  grad.addColorStop(0.5, '#5b8dd9');
+  grad.addColorStop(1,   '#9bbff4');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, HORIZON * P);
+
+  // Clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  for (const c of CLOUDS) {
+    const cx = ((c.x + cloudOffset) % (SCENE_W_PX / P + 40)) - 10;
+    roundRectPx(cx, c.y, c.w, c.h, 3);
+    roundRectPx(cx + 4, c.y - 3, c.w - 8, c.h - 1, 3);
+  }
+
+  // Ground
+  drawRect(0, HORIZON, SCENE_W_PX / P, SCENE_H_PX / P - HORIZON, '#3a7d44');
+  // darker ground strip
+  drawRect(0, HORIZON + 12, SCENE_W_PX / P, SCENE_H_PX / P - HORIZON - 12, '#2d6035');
+
+  // Path
+  drawRect(0, PATH_Y, SCENE_W_PX / P, PATH_H, '#c8a96e');
+  // path highlight
+  drawRect(0, PATH_Y + 2, SCENE_W_PX / P, 2, '#e0c97f');
+  // path edge
+  drawRect(0, PATH_Y, SCENE_W_PX / P, 2, '#a07040');
+  drawRect(0, PATH_Y + PATH_H - 2, SCENE_W_PX / P, 2, '#7a5030');
+
+  // Distant mountains
+  ctx.fillStyle = '#5577aa';
+  drawMountain(20,  45, 30, 18);
+  drawMountain(60,  48, 25, 14);
+  drawMountain(110, 42, 35, 22);
+  drawMountain(170, 46, 28, 16);
+
+  ctx.fillStyle = '#4466aa';
+  drawMountain(5,   50, 22, 12);
+  drawMountain(90,  47, 20, 16);
+  drawMountain(150, 44, 32, 20);
+}
+
+function roundRectPx(x, y, w, h, r) {
+  // simplified — just rects
+  ctx.fillRect((x) * P, (y) * P, w * P, h * P);
+  ctx.fillRect((x + r) * P, (y - 2) * P, (w - r * 2) * P, 2 * P);
+}
+
+function drawMountain(x, baseY, w, h) {
+  // triangle using ctx
+  ctx.beginPath();
+  ctx.moveTo((x) * P, (baseY) * P);
+  ctx.lineTo((x + w / 2) * P, (baseY - h) * P);
+  ctx.lineTo((x + w) * P, (baseY) * P);
+  ctx.fill();
+  // snow cap
+  ctx.fillStyle = '#e8eeff';
+  ctx.beginPath();
+  ctx.moveTo((x + w * 0.35) * P, (baseY - h * 0.55) * P);
+  ctx.lineTo((x + w / 2)    * P, (baseY - h) * P);
+  ctx.lineTo((x + w * 0.65) * P, (baseY - h * 0.55) * P);
+  ctx.fill();
+  // restore mountain color for next call
+  ctx.fillStyle = '#5577aa';
+}
+
+function drawTrees() {
+  for (const t of TREES) {
+    const tx = (t.x % (SCENE_W_PX / P - 20));
+    drawSprite(TREE_MAP, tx, HORIZON - 10, TREE_PAL);
+  }
+}
+
+function drawCastle() {
+  const cx = SCENE_W_PX / P - 38;
+  const cy = HORIZON - 19;
+  drawSprite(CASTLE_MAP, cx, cy, CASTLE_PAL);
+  // flag
+  drawSprite(FLAG_MAP, cx + 10, cy - 4, CASTLE_PAL);
+}
+
+function drawHero(frame) {
+  // heroX: 0=left edge, 1=just before castle
+  const leftEdge  = 12;
+  const rightEdge = SCENE_W_PX / P - 48;
+  const hx = Math.round(leftEdge + heroX * (rightEdge - leftEdge));
+  const hy = PATH_Y - 15;
+
+  const map = (frame % 2 === 0) ? HERO_FRAME0 : HERO_FRAME1;
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse((hx + 4) * P, (PATH_Y + PATH_H - 1) * P, 5 * P, 2 * P, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawSprite(map, hx, hy, HERO_PAL);
+}
+
+function getMonsters() {
+  const now = Date.now();
+  const monsters = [];
+  for (const t of tasks) {
+    if (t.done) continue;
+    const ageMs  = now - t.created;
+    const ageDays = ageMs / (1000 * 60 * 60 * 24);
+    if (ageDays >= 1) {
+      monsters.push({ type: ageDays >= 3 ? 'demon' : 'slime', task: t });
+    }
+  }
+  return monsters;
+}
+
+function drawMonsters() {
+  const monsters = getMonsters();
+  const leftEdge  = 12;
+  const rightEdge = SCENE_W_PX / P - 48;
+  const span = rightEdge - leftEdge;
+
+  // Distribute monsters evenly between hero and castle
+  const heroPos = leftEdge + heroX * span;
+  const castlePos = rightEdge - 6;
+  const gap = castlePos - heroPos;
+
+  monsters.forEach((m, i) => {
+    const frac = (i + 1) / (monsters.length + 1);
+    const mx = Math.round(heroPos + gap * frac);
+    const my = PATH_Y - (m.type === 'demon' ? 13 : 7);
+
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(
+      (mx + (m.type === 'demon' ? 6 : 5)) * P,
+      (PATH_Y + PATH_H - 1) * P,
+      (m.type === 'demon' ? 7 : 5) * P, 2 * P, 0, 0, Math.PI * 2
+    );
+    ctx.fill();
+
+    if (m.type === 'slime') {
+      drawSprite(SLIME_MAP, mx, my, SLIME_PAL);
+    } else {
+      drawSprite(DEMON_MAP, mx, my, DEMON_PAL);
+    }
+  });
+}
+
+function drawScene(ts) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Animate cloud
+  cloudOffset = (ts * 0.004) % (SCENE_W_PX / P + 40);
+
+  drawBackground();
+  drawTrees();
+  drawCastle();
+  drawMonsters();
+
+  // Walk animation
+  const walkFrame = Math.floor(ts / 300) % 4;
+  const isMoving  = Math.abs(heroX - walkTarget) > 0.002;
+
+  if (isMoving) {
+    heroX += (walkTarget - heroX) * 0.05;
+    heroAnim = walkFrame;
+  } else {
+    heroX = walkTarget;
+    heroAnim = 0;
+  }
+
+  drawHero(isMoving ? heroAnim : 0);
+
+  // Bounce idle: tiny y offset on hero every 2s
+  // (handled in drawHero implicitly by walkFrame=0)
+
+  animFrame = requestAnimationFrame(drawScene);
+}
+
+// ---------------------------------------------------------------
+// TASK LOGIC
+// ---------------------------------------------------------------
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) tasks = JSON.parse(raw);
+  } catch(e) { tasks = []; }
+}
+
+function saveTasks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+function addTask(text) {
+  if (!text.trim()) return;
+  tasks.push({
+    id:      Date.now(),
+    text:    text.trim(),
+    done:    false,
+    created: Date.now(),
+  });
+  saveTasks();
+  renderTasks();
+  updateProgress();
+  showToast('Quest added!');
+}
+
+function toggleTask(id) {
+  const t = tasks.find(t => t.id === id);
+  if (!t) return;
+  t.done = !t.done;
+  saveTasks();
+  renderTasks();
+  updateProgress();
+  if (t.done) showToast('Quest complete! +XP');
+}
+
+function deleteTask(id) {
+  tasks = tasks.filter(t => t.id !== id);
+  saveTasks();
+  renderTasks();
+  updateProgress();
+}
+
+function getAgeLabel(createdMs) {
+  const ageMs   = Date.now() - createdMs;
+  const mins    = Math.floor(ageMs / 60000);
+  const hours   = Math.floor(ageMs / 3600000);
+  const days    = Math.floor(ageMs / 86400000);
+  if (days >= 1)  return days + 'd ago';
+  if (hours >= 1) return hours + 'h ago';
+  if (mins >= 1)  return mins + 'm ago';
+  return 'just now';
+}
+
+function getAgeClass(createdMs, done) {
+  if (done) return '';
+  const days = (Date.now() - createdMs) / 86400000;
+  if (days >= 3) return 'age-2';
+  if (days >= 1) return 'age-1';
+  return '';
+}
+
+function renderTasks() {
+  const ul = document.getElementById('task-list');
+  const empty = document.getElementById('empty-msg');
+  const counter = document.getElementById('task-count');
+  const warning = document.getElementById('warning-banner');
+  ul.innerHTML = '';
+
+  const active   = tasks.filter(t => !t.done);
+  const done     = tasks.filter(t =>  t.done);
+  const all      = [...active, ...done];
+
+  counter.textContent = tasks.length + ' task' + (tasks.length !== 1 ? 's' : '');
+  empty.style.display = tasks.length === 0 ? 'block' : 'none';
+
+  const hasMonsters = getMonsters().length > 0;
+  warning.classList.toggle('show', hasMonsters);
+
+  for (const t of all) {
+    const li  = document.createElement('li');
+    li.className = 'task-item ' + getAgeClass(t.created, t.done) + (t.done ? ' done' : '');
+
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.className = 'task-check';
+    chk.checked = t.done;
+    chk.addEventListener('change', () => toggleTask(t.id));
+
+    const span = document.createElement('span');
+    span.className = 'task-text';
+    span.textContent = t.text;
+
+    const badge = document.createElement('span');
+    badge.className = 'task-age-badge';
+    badge.textContent = getAgeLabel(t.created);
+
+    const del = document.createElement('button');
+    del.className = 'task-del';
+    del.textContent = '×';
+    del.setAttribute('aria-label', 'Delete task');
+    del.addEventListener('click', () => deleteTask(t.id));
+
+    li.append(chk, span, badge, del);
+    ul.appendChild(li);
+  }
+}
+
+function updateProgress() {
+  const total    = tasks.length;
+  const done     = tasks.filter(t => t.done).length;
+  const pct      = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  document.getElementById('xp-bar-inner').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent  = pct + '%';
+
+  // Hero walks toward goal proportionally
+  walkTarget = total === 0 ? 0 : done / total;
+}
+
+// ---------------------------------------------------------------
+// TOAST
+// ---------------------------------------------------------------
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ---------------------------------------------------------------
+// UI EVENTS
+// ---------------------------------------------------------------
+document.getElementById('add-btn').addEventListener('click', () => {
+  const inp = document.getElementById('task-input');
+  addTask(inp.value);
+  inp.value = '';
+  inp.focus();
+});
+
+document.getElementById('task-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const inp = e.target;
+    addTask(inp.value);
+    inp.value = '';
+  }
+});
+
+// ---------------------------------------------------------------
+// BADGE REFRESH (age labels tick every minute)
+// ---------------------------------------------------------------
+setInterval(() => {
+  renderTasks();
+}, 60000);
+
+// ---------------------------------------------------------------
+// BOOT
+// ---------------------------------------------------------------
+loadTasks();
+renderTasks();
+updateProgress();
+resizeCanvas();
+requestAnimationFrame(drawScene);
+
+/* For demo/testing: uncomment below to inject aged tasks
+tasks.push({ id: 1, text: 'Old quest (1.5 days)', done: false, created: Date.now() - 1.5*86400000 });
+tasks.push({ id: 2, text: 'Ancient quest (4 days)', done: false, created: Date.now() - 4*86400000 });
+saveTasks(); renderTasks(); updateProgress();
+*/
+</script>
+</body>
+</html>
