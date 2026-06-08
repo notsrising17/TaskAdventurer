@@ -812,9 +812,6 @@ function drawScene(ts) {
 
   drawHero(isMoving ? heroAnim : 0);
 
-  // Bounce idle: tiny y offset on hero every 2s
-  // (handled in drawHero implicitly by walkFrame=0)
-
   animFrame = requestAnimationFrame(drawScene);
 }
 
@@ -985,12 +982,6 @@ renderTasks();
 updateProgress();
 resizeCanvas();
 requestAnimationFrame(drawScene);
-
-/* For demo/testing: uncomment below to inject aged tasks
-tasks.push({ id: 1, text: 'Old quest (1.5 days)', done: false, created: Date.now() - 1.5*86400000 });
-tasks.push({ id: 2, text: 'Ancient quest (4 days)', done: false, created: Date.now() - 4*86400000 });
-saveTasks(); renderTasks(); updateProgress();
-*/
 </script>
 </body>
 </html>
