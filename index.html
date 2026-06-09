@@ -946,10 +946,13 @@ function drawMap(time){
   // Domain units — drawn after commander so they're on top when at center
   DOMAINS.forEach((d,i)=>{
     const prog=domainProgress(i),hp=domainHP(i);
-    const tgt=posOnPath(d.path,prog);
-    const dx=tgt.x-unitPos[i].x,dy=tgt.y-unitPos[i].y;
-    const dist=Math.sqrt(dx*dx+dy*dy);
-    if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
+    // Only move units when there is actual progress — never pull back toward center
+    if(prog>0){
+      const tgt=posOnPath(d.path,prog);
+      const dx=tgt.x-unitPos[i].x,dy=tgt.y-unitPos[i].y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
+    }
     const sc=STATUS_COLOR[hpLevelOf(hp)];
     mx.strokeStyle=sc+'88'; mx.lineWidth=1.5;
     mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
