@@ -246,13 +246,19 @@
 <script>
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
+// path: waypoints [[tx,ty],...] from center (6,10) to destination along grid paths
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:3,  spawnTy:7,  targetTx:1,  targetTy:2,
-   portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null},
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:7,  targetTx:11, targetTy:2,  portraits:null, sheet:'merchant_sheet.png'},
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:14, targetTx:1,  targetTy:17, portraits:null, sheet:'fiighter_sheet.png'},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:6,  spawnTy:7,  targetTx:6,  targetTy:3,  portraits:null, sheet:'bard_sheet.png'},
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:14, targetTx:11, targetTy:17, portraits:null, sheet:'rogue_sheet.png'},
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:1,  targetTy:2,
+   portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null,
+   path:[[6,10],[3,10],[3,2],[1,2]]},
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:10, targetTy:2,  portraits:null, sheet:'merchant_sheet.png',
+   path:[[6,10],[9,10],[9,2],[10,2]]},
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', targetTx:1,  targetTy:17, portraits:null, sheet:'fiighter_sheet.png',
+   path:[[6,10],[3,10],[3,17],[1,17]]},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', targetTx:6,  targetTy:3,  portraits:null, sheet:'bard_sheet.png',
+   path:[[6,10],[6,3]]},
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', targetTx:11, targetTy:17, portraits:null, sheet:'rogue_sheet.png',
+   path:[[6,10],[9,10],[9,17],[11,17]]},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
@@ -525,7 +531,7 @@ const mc=document.getElementById('mapCanvas');
 const mx=mc.getContext('2d');
 const TS=20,COLS=13,ROWS=20;
 let MAP=buildMap();
-let unitPos=DOMAINS.map(d=>({x:d.spawnTx*TS+TS/2,y:d.spawnTy*TS+TS/2}));
+let unitPos=DOMAINS.map(()=>({x:6*TS+TS/2,y:10*TS+TS/2}));
 const UNIT_SPEED=0.35;
 let sparkles=[];
 let mapScale=1,mapOX=0,mapOY=0;
@@ -545,7 +551,7 @@ function buildMap(){
 
   // WORK (Merchant) spawn(9,7) → dest(11,2): col 9, row 2 east
   for(let y=2;y<=10;y++) path(y,9);
-  for(let x=9;x<=11;x++) path(2,x);
+  for(let x=9;x<=10;x++) path(2,x);
 
   // HEALTH (Fighter) spawn(3,14) → dest(1,17): col 3 south, row 17 west
   for(let y=10;y<=17;y++) path(y,3);
@@ -803,6 +809,27 @@ function grassColor(tx,ty,v){
   return ['#1e4d1e','#236123','#1a431a'][v];
 }
 
+function posOnPath(waypts,prog){
+  if(!waypts||!waypts.length) return {x:6*TS+TS/2,y:10*TS+TS/2};
+  if(prog<=0) return {x:waypts[0][0]*TS+TS/2,y:waypts[0][1]*TS+TS/2};
+  if(prog>=1){const w=waypts[waypts.length-1];return {x:w[0]*TS+TS/2,y:w[1]*TS+TS/2};}
+  const lens=[];let total=0;
+  for(let i=1;i<waypts.length;i++){
+    const l=Math.abs(waypts[i][0]-waypts[i-1][0])+Math.abs(waypts[i][1]-waypts[i-1][1]);
+    lens.push(l);total+=l;
+  }
+  const dist=prog*total;let walked=0;
+  for(let i=0;i<lens.length;i++){
+    if(walked+lens[i]>=dist){
+      const t=(dist-walked)/lens[i];
+      return {x:(waypts[i][0]+(waypts[i+1][0]-waypts[i][0])*t)*TS+TS/2,
+              y:(waypts[i][1]+(waypts[i+1][1]-waypts[i][1])*t)*TS+TS/2};
+    }
+    walked+=lens[i];
+  }
+  const w=waypts[waypts.length-1];return {x:w[0]*TS+TS/2,y:w[1]*TS+TS/2};
+}
+
 function drawMap(time){
   const W=mc.width,H=mc.height;
   mx.clearRect(0,0,W,H);
@@ -888,9 +915,8 @@ function drawMap(time){
   const pulse=0.5+0.5*Math.sin(time/250);
   DOMAINS.forEach((d,i)=>{
     const prog=domainProgress(i),hp=domainHP(i);
-    const targetX=(d.spawnTx+(d.targetTx-d.spawnTx)*prog)*TS+TS/2;
-    const targetY=(d.spawnTy+(d.targetTy-d.spawnTy)*prog)*TS+TS/2;
-    const dx=targetX-unitPos[i].x,dy=targetY-unitPos[i].y;
+    const tgt=posOnPath(d.path,prog);
+    const dx=tgt.x-unitPos[i].x,dy=tgt.y-unitPos[i].y;
     const dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
     const sc=STATUS_COLOR[hpLevelOf(hp)];
