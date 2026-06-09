@@ -52,10 +52,15 @@
   .dbarwrap{flex:1;height:6px;background:#070710;border:1px solid #2a2050;}
   .dbar{height:100%;transition:width .4s,background-color .4s;}
 
-  /* Form */
+  /* Form — collapsed by default, + button to expand */
+  #formToggle{position:fixed;bottom:calc(40vh + 10px);left:50%;transform:translateX(-50%);
+    font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;
+    border-bottom:3px solid #a88a00;padding:8px 20px;cursor:pointer;letter-spacing:2px;z-index:6;
+    box-shadow:0 0 12px rgba(255,215,0,.3);}
+  #formToggle.up{bottom:calc(40vh + 16px);}
   #formPanel{left:50%;transform:translateX(-50%);bottom:calc(40vh + 16px);width:96%;max-width:540px;
-    padding:8px;display:flex;gap:5px;align-items:stretch;flex-wrap:wrap;}
-  #formPanel.collapsed{bottom:54px;}
+    padding:8px;display:none;gap:5px;align-items:stretch;flex-wrap:wrap;}
+  #formPanel.open{display:flex;}
   #formPanel input,#formPanel select{font-family:inherit;font-size:7px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:6px;outline:none;}
   #formPanel select option{background:#0d0b22;}
   #taskName{flex:1 1 160px;min-width:0;}
@@ -133,6 +138,19 @@
   #gameover p{font-size:8px;line-height:1.8;color:#ffcccc;}
   #reviveBtn{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;cursor:pointer;}
 
+  /* Desktop: style side bars as intentional panels */
+  @media(min-width:601px){
+    #portraitCol{top:0;left:0;bottom:0;padding:16px 8px;gap:6px;overflow-y:auto;
+      background:rgba(6,4,18,.92);border-right:1px solid #1a1430;justify-content:center;}
+    .portCard{width:68px;}
+    #statsPanel{top:0;right:0;bottom:0;width:210px;border-radius:0;border-top:none;border-right:none;border-bottom:none;
+      overflow-y:auto;padding:16px 12px;}
+    /* center form over map */
+    #formToggle{bottom:calc(40vh + 10px);}
+    #formPanel{bottom:calc(40vh + 52px);}
+    #listPanel{left:80px;right:210px;}
+  }
+
   @media(max-width:600px){
     #portraitCol{top:6px;left:6px;gap:3px;}
     .portCard{width:46px;padding:3px;}
@@ -140,8 +158,8 @@
     .portName{font-size:3px;}
     #statsPanel{width:calc(100% - 64px);right:0;top:0;padding:8px 10px;gap:6px;border-top:none;border-right:none;}
     .stat-name{font-size:8px;}
-    #formPanel{left:0;right:0;bottom:calc(40vh + 10px);transform:none;width:100%;max-width:none;border-left:none;border-right:none;padding:8px 10px;flex-direction:column;gap:6px;}
-    #formPanel.collapsed{bottom:48px;}
+    #formToggle{left:0;right:0;transform:none;width:100%;max-width:none;border-left:none;border-right:none;text-align:center;}
+    #formPanel{left:0;right:0;bottom:calc(40vh + 52px);transform:none;width:100%;max-width:none;border-left:none;border-right:none;padding:8px 10px;flex-direction:column;gap:6px;}
     #formPanel input,#formPanel select{height:44px;font-size:9px;padding:0 8px;}
     #taskName,#taskDomain,#taskType{flex:1 1 100%;}
     #taskGoal,#taskDate{flex:1 1 auto;}
@@ -176,6 +194,7 @@
   <div class="status-badge" id="statusBadge">READY</div>
 </div>
 
+<button id="formToggle" onclick="toggleForm()">＋ ADD TASK</button>
 <div id="formPanel" class="hud glass">
   <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60">
   <select id="taskDomain"></select>
@@ -228,12 +247,12 @@
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:3,  spawnTy:10, targetTx:1,  targetTy:2,
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:3,  spawnTy:7,  targetTx:1,  targetTy:2,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png']},
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:10, targetTx:11, targetTy:2,  portraits:null},
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:12, targetTx:1,  targetTy:17, portraits:null},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:7,  spawnTy:9,  targetTx:6,  targetTy:3,  portraits:null},
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:12, targetTx:11, targetTy:17, portraits:null},
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:7,  targetTx:11, targetTy:2,  portraits:null},
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:14, targetTx:1,  targetTy:17, portraits:null},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:6,  spawnTy:7,  targetTx:6,  targetTy:3,  portraits:null},
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:14, targetTx:11, targetTy:17, portraits:null},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
@@ -489,34 +508,33 @@ function buildMap(){
   // Col 6: vertical spine (north-south)
   for(let y=0;y<ROWS;y++) m[y][6]=1;
 
-  // HOME (Wizard) spawn(3,10) → dest(1,2): col 3 north, row 2 west
+  // HOME (Wizard) spawn(3,7) → dest(1,2): col 3, row 2 west
   for(let y=2;y<=10;y++) path(y,3);
   for(let x=1;x<=3;x++) path(2,x);
 
-  // WORK (Merchant) spawn(9,10) → dest(11,2): col 9 north, row 2 east
+  // WORK (Merchant) spawn(9,7) → dest(11,2): col 9, row 2 east
   for(let y=2;y<=10;y++) path(y,9);
   for(let x=9;x<=11;x++) path(2,x);
 
-  // HEALTH (Fighter) spawn(3,12) → dest(1,17): col 3 south, row 17 west
+  // HEALTH (Fighter) spawn(3,14) → dest(1,17): col 3 south, row 17 west
   for(let y=10;y<=17;y++) path(y,3);
   for(let x=1;x<=3;x++) path(17,x);
 
-  // CREATIVITY (Bard) spawn(7,9) → dest(6,3): row 9 west, col 6 already done
-  path(9,7);
+  // CREATIVITY (Bard) spawn(6,7) → dest(6,3): col 6 already spine
+  // (no extra paths needed — col 6 covers full height)
 
-  // SOCIAL (Rogue) spawn(9,12) → dest(11,17): col 9 south, row 17 east
+  // SOCIAL (Rogue) spawn(9,14) → dest(11,17): col 9 south, row 17 east
   for(let y=10;y<=17;y++) path(y,9);
   for(let x=9;x<=11;x++) path(17,x);
 
   // Water: right coastal strip (x>10, y<7)
   for(let y=0;y<7;y++) for(let x=11;x<COLS;x++) m[y][x]=3;
 
-  // Trees — varied density per zone, hand-placed off paths
-  [[1,1],[1,4],[1,8],[2,5],[3,7],[4,1],[4,4],[4,8],[4,11],
-   [5,1],[5,4],[6,8],[7,1],[7,4],[8,4],[9,4],[9,11],
-   [11,1],[11,4],[11,8],[11,11],[12,4],[12,8],[13,1],[13,11],
-   [14,4],[14,8],[15,1],[15,4],[15,11],[16,4],[16,8],
-   [18,1],[18,4],[18,8],[18,11],[19,4],[19,8]
+  // Trees — sparse, accent only (60% fewer than before)
+  [[1,1],[1,8],[4,1],[4,4],[4,8],
+   [7,1],[8,4],[9,11],
+   [12,1],[12,8],[14,4],[15,11],
+   [18,1],[18,8],[19,4]
   ].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
 
   DOMAINS.forEach(d=>{ if(m[d.targetTy]&&m[d.targetTy][d.targetTx]!==3) m[d.targetTy][d.targetTx]=5; });
@@ -888,14 +906,22 @@ document.getElementById('addBtn').onclick=()=>{
   if(!name) return;
   addTask(name,domain,type,goal,due||null);
   document.getElementById('taskName').value=''; document.getElementById('taskDate').value=''; document.getElementById('taskGoal').value='';
+  toggleForm();
 };
 document.getElementById('taskName').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addBtn').click(); });
 document.getElementById('reviveBtn').onclick=()=>{ state.hp=HP_MAX; save(); refresh(); };
 document.getElementById('collapseBtn').onclick=()=>{
-  const lp=document.getElementById('listPanel'),fp=document.getElementById('formPanel');
-  const c=lp.classList.toggle('collapsed'); fp.classList.toggle('collapsed',c);
+  const lp=document.getElementById('listPanel');
+  const c=lp.classList.toggle('collapsed');
   document.getElementById('collapseBtn').textContent=c?'^':'v';
 };
+function toggleForm(){
+  const fp=document.getElementById('formPanel'),btn=document.getElementById('formToggle');
+  const open=fp.classList.toggle('open');
+  btn.textContent=open?'✕ CANCEL':'＋ ADD TASK';
+  btn.classList.toggle('up',open);
+  if(open) document.getElementById('taskName').focus();
+}
 
 // ============ DOMAIN FOCUS ============
 let focusIdx=null;
