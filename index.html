@@ -228,12 +228,12 @@
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:5,  spawnTy:7,  targetTx:2,  targetTy:1,
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:3,  spawnTy:10, targetTx:1,  targetTy:2,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png']},
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:13, spawnTy:7,  targetTx:14, targetTy:1,  portraits:null},
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:5,  spawnTy:9,  targetTx:2,  targetTy:11, portraits:null},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:10, spawnTy:8,  targetTx:9,  targetTy:3,  portraits:null},
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:13, spawnTy:9,  targetTx:16, targetTy:10, portraits:null},
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:10, targetTx:11, targetTy:2,  portraits:null},
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:12, targetTx:1,  targetTy:17, portraits:null},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:7,  spawnTy:9,  targetTx:6,  targetTy:3,  portraits:null},
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:12, targetTx:11, targetTy:17, portraits:null},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
@@ -473,54 +473,50 @@ function checkGameOver(){ document.getElementById('gameover').classList.toggle('
 // ============ MAP ============
 const mc=document.getElementById('mapCanvas');
 const mx=mc.getContext('2d');
-const TS=20,COLS=20,ROWS=13;
+const TS=20,COLS=13,ROWS=20;
 let MAP=buildMap();
 let unitPos=DOMAINS.map(d=>({x:d.spawnTx*TS+TS/2,y:d.spawnTy*TS+TS/2}));
 const UNIT_SPEED=0.35;
 let sparkles=[];
+let mapScale=1,mapOX=0,mapOY=0;
 
 function buildMap(){
   const m=[]; for(let y=0;y<ROWS;y++){const r=[];for(let x=0;x<COLS;x++)r.push(0);m.push(r);}
-  const path=(y,x)=>{ if(m[y]&&m[y][x]===0) m[y][x]=1; };
+  const path=(y,x)=>{ if(y>=0&&y<ROWS&&x>=0&&x<COLS&&m[y][x]===0) m[y][x]=1; };
 
-  // Central crossroads (9,6)
-  for(let x=0;x<16;x++) m[6][x]=1;          // row 6 east-west spine
-  for(let y=0;y<ROWS;y++) path(y,9);         // col 9 north-south spine
+  // Row 10: horizontal crossroads spine
+  for(let x=0;x<COLS;x++) m[10][x]=1;
+  // Col 6: vertical spine (north-south)
+  for(let y=0;y<ROWS;y++) m[y][6]=1;
 
-  // HOME (Wizard) spawn(5,7) → dest(2,1):
-  // crossroads → west col5 south → row7 west → col2 north to dest
-  for(let y=6;y<=7;y++) path(y,5);           // col 5 rows 6-7
-  for(let x=2;x<=5;x++) path(7,x);           // row 7 west
-  for(let y=1;y<=7;y++) path(y,2);           // col 2 up to dest
+  // HOME (Wizard) spawn(3,10) → dest(1,2): col 3 north, row 2 west
+  for(let y=2;y<=10;y++) path(y,3);
+  for(let x=1;x<=3;x++) path(2,x);
 
-  // WORK (Merchant) spawn(13,7) → dest(14,1):
-  // crossroads → east row6 → col13 south → step east → col14 north to dest
-  for(let y=6;y<=7;y++) path(y,13);          // col 13 rows 6-7
-  path(7,14);                                  // step east to col 14
-  for(let y=1;y<=7;y++) path(y,14);          // col 14 up to dest
+  // WORK (Merchant) spawn(9,10) → dest(11,2): col 9 north, row 2 east
+  for(let y=2;y<=10;y++) path(y,9);
+  for(let x=9;x<=11;x++) path(2,x);
 
-  // HEALTH (Fighter) spawn(5,9) → dest(2,11):
-  // shared col5 → continue south → row9 west → col2 south to dest
-  for(let y=6;y<=9;y++) path(y,5);           // col 5 rows 6-9 (extends HOME branch)
-  for(let x=2;x<=5;x++) path(9,x);           // row 9 west
-  for(let y=7;y<=11;y++) path(y,2);          // col 2 south to dest
+  // HEALTH (Fighter) spawn(3,12) → dest(1,17): col 3 south, row 17 west
+  for(let y=10;y<=17;y++) path(y,3);
+  for(let x=1;x<=3;x++) path(17,x);
 
-  // CREATIVITY (Bard) spawn(10,8) → dest(9,3):
-  // col9 spine covers this entirely; just add spawn connector
-  path(8,10);                                  // spawn step west to col9
+  // CREATIVITY (Bard) spawn(7,9) → dest(6,3): row 9 west, col 6 already done
+  path(9,7);
 
-  // SOCIAL (Rogue) spawn(13,9) → dest(16,10):
-  // crossroads → east col13 south → row10 east → col16 to dest
-  for(let y=6;y<=10;y++) path(y,13);         // col 13 south (extends WORK branch)
-  for(let x=13;x<=16;x++) path(10,x);        // row 10 east
-  for(let y=4;y<=10;y++) path(y,16);         // col 16
+  // SOCIAL (Rogue) spawn(9,12) → dest(11,17): col 9 south, row 17 east
+  for(let y=10;y<=17;y++) path(y,9);
+  for(let x=9;x<=11;x++) path(17,x);
 
-  // Water (top-right)
-  for(let y=0;y<=3;y++) for(let x=16;x<COLS;x++) m[y][x]=3;
+  // Water: right coastal strip (x>10, y<7)
+  for(let y=0;y<7;y++) for(let x=11;x<COLS;x++) m[y][x]=3;
 
-  // Trees — hand-placed avoiding paths
-  [[2,5],[1,12],[10,4],[4,7],[12,3],[10,12],[0,11],[11,8],[7,18],[5,0],[12,7],[3,4],[8,4],[4,12],[7,11],[3,17],[9,17],[11,5],
-   [1,6],[3,11],[5,3],[6,18],[8,1],[8,17],[11,12],[0,6],[4,4],[12,17]
+  // Trees — varied density per zone, hand-placed off paths
+  [[1,1],[1,4],[1,8],[2,5],[3,7],[4,1],[4,4],[4,8],[4,11],
+   [5,1],[5,4],[6,8],[7,1],[7,4],[8,4],[9,4],[9,11],
+   [11,1],[11,4],[11,8],[11,11],[12,4],[12,8],[13,1],[13,11],
+   [14,4],[14,8],[15,1],[15,4],[15,11],[16,4],[16,8],
+   [18,1],[18,4],[18,8],[18,11],[19,4],[19,8]
   ].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
 
   DOMAINS.forEach(d=>{ if(m[d.targetTy]&&m[d.targetTy][d.targetTx]!==3) m[d.targetTy][d.targetTx]=5; });
@@ -740,40 +736,96 @@ function drawGenericObjective(cx,cy,d,captured){
   if(captured){ mx.fillStyle='#ffe840'; mx.font='8px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx+4,cy-22); }
 }
 
+// Zone definitions for territory tinting
+const ZONES=[
+  {x:0,y:0,w:5,h:7,  color:'rgba(212,136,76,.10)'},   // HOME — warm amber
+  {x:8,y:0,w:5,h:7,  color:'rgba(200,168,64,.10)'},   // WORK — gold
+  {x:4,y:0,w:4,h:6,  color:'rgba(204,68,170,.07)'},   // CREATIVITY — pink
+  {x:0,y:13,w:5,h:7, color:'rgba(68,170,85,.10)'},    // HEALTH — green
+  {x:8,y:12,w:5,h:8, color:'rgba(34,136,170,.10)'},   // SOCIAL — teal
+];
+
+function grassColor(tx,ty,v){
+  if(ty<7&&tx<4)  return ['#24511e','#285a21','#1e461a'][v];  // HOME: warm green
+  if(ty<6&&tx>7)  return ['#2a4d18','#305821','#254515'][v];  // WORK: golden green
+  if(ty>13&&tx<4) return ['#1a4f20','#1d5823','#165018'][v];  // HEALTH: lush
+  if(ty>12&&tx>7) return ['#0f2a14','#122e17','#0a2410'][v];  // SOCIAL: dark
+  if(ty<6&&tx>3&&tx<8) return ['#2e1a4a','#341e54','#28163e'][v]; // CREATIVITY: twilight
+  return ['#1e4d1e','#236123','#1a431a'][v];
+}
+
 function drawMap(time){
   const W=mc.width,H=mc.height;
   mx.clearRect(0,0,W,H);
-  const sx=W/(COLS*TS),sy=H/(ROWS*TS);
-  mx.save(); mx.scale(sx,sy);
+
+  // Uniform scaling: fill width on portrait, fill height on landscape
+  const mapAR=COLS/ROWS, screenAR=W/H;
+  mapScale = screenAR<mapAR ? W/(COLS*TS) : H/(ROWS*TS);
+  mapOX = (W-COLS*TS*mapScale)/2;
+  mapOY = (H-ROWS*TS*mapScale)/2;
+
+  // Fill letterbox bars with dark
+  mx.fillStyle='#050510';
+  if(mapOX>0){ mx.fillRect(0,0,mapOX,H); mx.fillRect(W-mapOX,0,mapOX,H); }
+  if(mapOY>0){ mx.fillRect(0,0,W,mapOY); mx.fillRect(0,H-mapOY,W,mapOY); }
+
+  mx.save();
+  mx.translate(mapOX,mapOY);
+  mx.scale(mapScale,mapScale);
 
   // Tiles
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const t=MAP[y][x],px0=x*TS,py0=y*TS,v=(x*13+y*7)%3;
     if(t===0||t===4||t===5){
-      mx.fillStyle=['#1e4d1e','#236123','#1a431a'][v]; mx.fillRect(px0,py0,TS,TS);
-      mx.fillStyle='#3aa03a'; if((x+y)%2===0) mx.fillRect(px0+3,py0+3,3,3);
+      mx.fillStyle=grassColor(x,y,v); mx.fillRect(px0,py0,TS,TS);
+      // Grass detail
+      mx.fillStyle='rgba(80,180,80,.25)'; if((x+y)%2===0) mx.fillRect(px0+3,py0+3,3,3);
       mx.fillRect(px0+13,py0+11,2,2); mx.fillRect(px0+8,py0+15,2,2);
     } else if(t===1){
-      mx.fillStyle='#6b4423'; mx.fillRect(px0,py0,TS,TS);
-      mx.fillStyle='#4a3018'; mx.fillRect(px0,py0,TS,2); mx.fillRect(px0,py0,2,TS);
-      mx.fillStyle='#8a6038'; mx.fillRect(px0+4,py0+9,3,3); mx.fillRect(px0+13,py0+4,2,2);
+      // Dirt path — varied stones
+      mx.fillStyle='#7a5230'; mx.fillRect(px0,py0,TS,TS);
+      mx.fillStyle='#5a3a1a'; mx.fillRect(px0,py0,TS,1); mx.fillRect(px0,py0,1,TS);
+      mx.fillStyle='#9a7248'; mx.fillRect(px0+4,py0+9,3,2); mx.fillRect(px0+13,py0+4,2,2);
+      mx.fillStyle='rgba(255,255,255,.06)'; mx.fillRect(px0+1,py0+1,TS-2,3);
     } else if(t===3){
-      mx.fillStyle='#1a3a6b'; mx.fillRect(px0,py0,TS,TS);
-      mx.strokeStyle='#4488cc'; mx.lineWidth=1.5;
-      for(let wy=4;wy<TS;wy+=7){ mx.beginPath(); for(let wx=0;wx<=TS;wx+=2){ const yy=py0+wy+Math.sin((px0+wx)/5+time/350+wy)*1.6; if(wx===0) mx.moveTo(px0+wx,yy); else mx.lineTo(px0+wx,yy); } mx.stroke(); }
+      // Water
+      mx.fillStyle='#152d5e'; mx.fillRect(px0,py0,TS,TS);
+      mx.fillStyle='rgba(40,110,200,.35)';
+      mx.fillRect(px0,py0,TS,TS);
+      mx.strokeStyle='rgba(80,160,255,.5)'; mx.lineWidth=1;
+      for(let wy=3;wy<TS;wy+=6){
+        mx.beginPath();
+        for(let wx=0;wx<=TS;wx+=2){
+          const yy=py0+wy+Math.sin((px0+wx)/4+time/300+wy)*1.4;
+          wx===0?mx.moveTo(px0+wx,yy):mx.lineTo(px0+wx,yy);
+        }
+        mx.stroke();
+      }
     }
-    if(t!==3){ mx.fillStyle='rgba(0,0,0,.22)'; mx.fillRect(px0,py0+TS-2,TS,2); mx.fillRect(px0+TS-2,py0,2,TS); }
+    // Grid shadow lines (skip water)
+    if(t!==3){ mx.fillStyle='rgba(0,0,0,.18)'; mx.fillRect(px0,py0+TS-1,TS,1); mx.fillRect(px0+TS-1,py0,1,TS); }
   }
-  // Trees
+
+  // Zone territory tints (painted over tiles, under trees)
+  ZONES.forEach(z=>{ mx.fillStyle=z.color; mx.fillRect(z.x*TS,z.y*TS,z.w*TS,z.h*TS); });
+
+  // Trees — layered for depth
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     if(MAP[y][x]!==4) continue;
     const cxp=x*TS+TS/2,cyp=y*TS+TS/2;
-    mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(cxp+2,cyp+6,11,5,0,0,7); mx.fill();
-    mx.fillStyle='#3a2410'; mx.beginPath(); mx.arc(cxp,cyp+4,2.5,0,7); mx.fill();
-    mx.fillStyle='#143d14'; mx.beginPath(); mx.arc(cxp,cyp,9,0,7); mx.fill();
-    mx.beginPath(); mx.arc(cxp-5,cyp-3,5,0,7); mx.fill(); mx.beginPath(); mx.arc(cxp+5,cyp+2,5,0,7); mx.fill();
-    mx.fillStyle='#2a7a2a'; mx.beginPath(); mx.arc(cxp-2,cyp-1,6,0,7); mx.fill();
-    mx.fillStyle='#4cb04c'; mx.beginPath(); mx.arc(cxp-3,cyp-3,3.5,0,7); mx.fill();
+    // Shadow
+    mx.fillStyle='rgba(0,0,0,.3)'; mx.beginPath(); mx.ellipse(cxp+2,cyp+7,10,4,0,0,7); mx.fill();
+    // Trunk
+    mx.fillStyle='#3a2410'; mx.fillRect(cxp-2,cyp+2,4,6);
+    // Dark inner canopy
+    mx.fillStyle='#0f3010'; mx.beginPath(); mx.arc(cxp,cyp,10,0,7); mx.fill();
+    mx.beginPath(); mx.arc(cxp-5,cyp-2,6,0,7); mx.fill();
+    mx.beginPath(); mx.arc(cxp+5,cyp+1,6,0,7); mx.fill();
+    // Mid canopy
+    mx.fillStyle='#1a5018'; mx.beginPath(); mx.arc(cxp-1,cyp-1,8,0,7); mx.fill();
+    // Highlight
+    mx.fillStyle='#3a9a30'; mx.beginPath(); mx.arc(cxp-2,cyp-4,5,0,7); mx.fill();
+    mx.fillStyle='#5cc04a'; mx.beginPath(); mx.arc(cxp-4,cyp-5,2.5,0,7); mx.fill();
   }
 
   // Objectives
@@ -783,25 +835,23 @@ function drawMap(time){
   sparkles.forEach(s=>{ s.t+=0.05; const r=s.t*24,a=1-s.t; if(a>0){mx.fillStyle='rgba(255,255,180,'+a+')';mx.fillRect(s.x+Math.cos(s.a)*r-2,s.y+Math.sin(s.a)*r-2,4,4);} });
   sparkles=sparkles.filter(s=>s.t<1);
 
-  // Domain units - march toward objective based on progress
+  // Domain units
   const pulse=0.5+0.5*Math.sin(time/250);
   DOMAINS.forEach((d,i)=>{
-    const prog=domainProgress(i);
-    const hp=domainHP(i);
+    const prog=domainProgress(i),hp=domainHP(i);
     const targetX=(d.spawnTx+(d.targetTx-d.spawnTx)*prog)*TS+TS/2;
     const targetY=(d.spawnTy+(d.targetTy-d.spawnTy)*prog)*TS+TS/2;
     const dx=targetX-unitPos[i].x,dy=targetY-unitPos[i].y;
     const dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
-    // glow ring
     const sc=STATUS_COLOR[hpLevelOf(hp)];
     mx.strokeStyle=sc+'88'; mx.lineWidth=1.5;
     mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
     drawUnit(unitPos[i].x,unitPos[i].y,i,hp);
   });
 
-  // Commander at crossroads
-  const hx=9*TS+TS/2,hy=6*TS+TS/2,lvl=hpLevel();
+  // Commander at crossroads (6,10)
+  const hx=6*TS+TS/2,hy=10*TS+TS/2,lvl=hpLevel();
   const tokCol=['#3a7aff','#ffcc22','#ff8822','#ff2a2a'][lvl];
   mx.strokeStyle=tokCol+'88'; mx.lineWidth=2;
   mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
@@ -810,7 +860,7 @@ function drawMap(time){
   if(spriteImg.complete&&spriteImg.naturalWidth>0){ mx.drawImage(spriteImg,hx-14,hy-18,28,32); }
   else{ mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,hy-14); mx.lineTo(hx+14,hy); mx.lineTo(hx,hy+14); mx.lineTo(hx-14,hy); mx.closePath(); mx.fill(); }
   mx.restore();
-  if(lvl===3){ const v=mx.createRadialGradient(COLS*TS/2,ROWS*TS/2,40,COLS*TS/2,ROWS*TS/2,COLS*TS/1.4); v.addColorStop(0,'rgba(238,34,34,0)'); v.addColorStop(1,'rgba(180,0,0,0.5)'); mx.fillStyle=v; mx.fillRect(0,0,COLS*TS,ROWS*TS); }
+  if(lvl===3){ const v=mx.createRadialGradient(COLS*TS/2,ROWS*TS/2,40,COLS*TS/2,ROWS*TS/2,COLS*TS); v.addColorStop(0,'rgba(238,34,34,0)'); v.addColorStop(1,'rgba(180,0,0,0.5)'); mx.fillStyle=v; mx.fillRect(0,0,COLS*TS,ROWS*TS); }
   mx.restore();
 }
 
@@ -921,8 +971,8 @@ function submitCheckin(){
 // Canvas tap → open focus for nearest unit
 mc.addEventListener('click',e=>{
   const rect=mc.getBoundingClientRect();
-  const lx=(e.clientX-rect.left)*COLS*TS/mc.width;
-  const ly=(e.clientY-rect.top)*ROWS*TS/mc.height;
+  const lx=((e.clientX-rect.left)*mc.width/rect.width - mapOX)/mapScale;
+  const ly=((e.clientY-rect.top)*mc.height/rect.height - mapOY)/mapScale;
   for(let i=0;i<DOMAINS.length;i++){
     if(Math.abs(lx-unitPos[i].x)<16&&Math.abs(ly-unitPos[i].y)<20){ openFocus(i); return; }
   }
