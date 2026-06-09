@@ -143,12 +143,26 @@
 
 <script>
 const PORTRAIT_SRCS = ['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'];
-const spriteImg = new Image(); spriteImg.src = 'wizard_sprite_16bit.png';
+const spriteImg = new Image();
+let processedSprite = null;
+spriteImg.onload = () => {
+  const oc = document.createElement('canvas');
+  oc.width = spriteImg.naturalWidth; oc.height = spriteImg.naturalHeight;
+  const ox = oc.getContext('2d');
+  ox.drawImage(spriteImg, 0, 0);
+  const d = ox.getImageData(0, 0, oc.width, oc.height);
+  for(let i=0; i<d.data.length; i+=4){
+    if(d.data[i]>210 && d.data[i+1]>210 && d.data[i+2]>210) d.data[i+3]=0;
+  }
+  ox.putImageData(d, 0, 0);
+  processedSprite = oc;
+};
+spriteImg.src = 'wizard_sprite_16bit.png';
 function updatePortrait(){ document.getElementById('portraitImg').src = PORTRAIT_SRCS[hpLevel()]; }
 
 const TOWNS = [
   {name:'HEARTHSTONE',tx:2, ty:1, color:'#d4884c',roof:'#8b3a10'},
-  {name:'IRON KEEP',  tx:17,ty:1, color:'#8a8aaa',roof:'#4a4a6a'},
+  {name:'IRON KEEP',  tx:14,ty:1, color:'#8a8aaa',roof:'#4a4a6a'},
   {name:'DARKWOOD',   tx:2, ty:11,color:'#3a6a3a',roof:'#1a3a1a'},
   {name:'SALTPORT',   tx:16,ty:10,color:'#2a6a9a',roof:'#1a3a5a'},
   {name:'CROSSROADS', tx:9, ty:3, color:'#c8a840',roof:'#7a6010'}
@@ -302,10 +316,22 @@ const HERO_SPEED=0.6;
 
 function buildMap(){
   const m=[]; for(let y=0;y<ROWS;y++){const r=[];for(let x=0;x<COLS;x++)r.push(0);m.push(r);}
-  for(let x=0;x<COLS;x++) if(m[6][x]===0) m[6][x]=1;
+  // main horizontal spine (row 6) and vertical spine (col 9)
+  for(let x=0;x<COLS;x++) m[6][x]=1;
   for(let y=0;y<ROWS;y++) if(m[y][9]===0) m[y][9]=1;
-  for(let y=0;y<=3;y++) for(let x=15;x<COLS;x++) m[y][x]=3;
-  [[2,5],[1,12],[10,4],[11,15],[2,7],[12,3],[10,12],[0,11],[3,1],[11,8],[7,18],[5,0],[12,7]].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
+  // branch: col 2 connects Hearthstone(2,1) and Darkwood(2,11) to row 6
+  for(let y=1;y<=11;y++) if(m[y][2]===0) m[y][2]=1;
+  // branch: col 14 connects Iron Keep(14,1) to row 6
+  for(let y=1;y<=6;y++) if(m[y][14]===0) m[y][14]=1;
+  // branch: col 16 connects Saltport(16,10) to row 6, then row 10 to col 16
+  for(let y=6;y<=10;y++) if(m[y][16]===0) m[y][16]=1;
+  for(let x=9;x<=16;x++) if(m[10][x]===0) m[10][x]=1;
+  // water top-right (push boundary to x>=16 to clear Iron Keep path)
+  for(let y=0;y<=3;y++) for(let x=16;x<COLS;x++) m[y][x]=3;
+  // trees - clear of all paths and towns
+  [[2,5],[1,12],[10,4],[4,7],[12,3],[10,12],[0,11],[11,8],[7,18],[5,0],[12,7],[3,4],[8,4],[4,12],[7,11],[3,17],[9,17],[11,5]].forEach(([y,x])=>{
+    if(m[y]&&m[y][x]===0) m[y][x]=4;
+  });
   TOWNS.forEach(t=>{ if(m[t.ty]&&m[t.ty][t.tx]!==3) m[t.ty][t.tx]=5; });
   return m;
 }
@@ -346,17 +372,30 @@ function fitMap(){ mc.width=window.innerWidth; mc.height=Math.max(340,window.inn
 window.addEventListener('resize',fitMap);
 
 function drawTown(t, cleared){
-  const cx=t.tx*TS+TS/2,cy=t.ty*TS+TS/2;
-  // glow when cleared
-  if(cleared){ mx.fillStyle='rgba(255,220,80,0.18)'; mx.beginPath(); mx.arc(cx,cy,18,0,7); mx.fill(); }
-  mx.fillStyle=t.color; mx.fillRect(cx-8,cy-4,16,10);
-  mx.fillStyle=t.roof; mx.beginPath(); mx.moveTo(cx-10,cy-4); mx.lineTo(cx,cy-14); mx.lineTo(cx+10,cy-4); mx.closePath(); mx.fill();
-  mx.fillStyle='#1a0a00'; mx.fillRect(cx-2,cy+1,4,5);
-  mx.fillStyle='#ffe080'; mx.fillRect(cx-7,cy-2,3,3); mx.fillRect(cx+4,cy-2,3,3);
-  if(cleared){ mx.fillStyle='#ffe840'; mx.font='8px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx,cy-18); }
-  mx.font='5px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
-  mx.fillStyle='rgba(0,0,0,.7)'; mx.fillText(t.name,cx+1,cy+8);
-  mx.fillStyle=cleared?'#ffe840':'#ffe8a0'; mx.fillText(t.name,cx,cy+7);
+  const cx=t.tx*TS+TS/2, cy=t.ty*TS+TS/2;
+  if(cleared){ mx.fillStyle='rgba(255,220,80,0.2)'; mx.beginPath(); mx.arc(cx,cy-4,22,0,7); mx.fill(); }
+  // building body (larger: 22 wide, 14 tall)
+  mx.fillStyle=cleared?'#c8b860':t.color;
+  mx.fillRect(cx-11,cy-2,22,14);
+  // side shadow
+  mx.fillStyle='rgba(0,0,0,0.2)'; mx.fillRect(cx+5,cy-2,6,14);
+  // roof (larger pitch)
+  mx.fillStyle=t.roof;
+  mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-16); mx.lineTo(cx+13,cy-2); mx.closePath(); mx.fill();
+  // roof highlight
+  mx.fillStyle='rgba(255,255,255,0.15)';
+  mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-16); mx.lineTo(cx-4,cy-2); mx.closePath(); mx.fill();
+  // door
+  mx.fillStyle='#1a0a00'; mx.fillRect(cx-3,cy+4,6,8);
+  // windows
+  mx.fillStyle='#ffe080'; mx.fillRect(cx-9,cy,5,4); mx.fillRect(cx+4,cy,5,4);
+  mx.fillStyle='rgba(255,255,200,0.5)'; mx.fillRect(cx-8,cy+1,2,2); mx.fillRect(cx+5,cy+1,2,2);
+  // cleared star
+  if(cleared){ mx.fillStyle='#ffe840'; mx.font='10px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx,cy-22); }
+  // small label below building
+  mx.font='3px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
+  mx.fillStyle='rgba(0,0,0,.8)'; mx.fillText(t.name,cx+0.5,cy+13.5);
+  mx.fillStyle=cleared?'#ffe840':'#ffe8a0'; mx.fillText(t.name,cx,cy+13);
 }
 
 function drawMap(time){
@@ -442,8 +481,8 @@ function drawMap(time){
   mx.beginPath(); mx.arc(hx,bobY+5,12+pulse*4,0,7); mx.stroke();
   mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,bobY+7,9,4,0,0,7); mx.fill();
   mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
-  if(spriteImg.complete&&spriteImg.naturalWidth>0){
-    mx.drawImage(spriteImg,hx-14,bobY-18,28,32);
+  if(processedSprite){
+    mx.drawImage(processedSprite,hx-14,bobY-18,28,32);
   } else {
     mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,bobY-14); mx.lineTo(hx+14,bobY); mx.lineTo(hx,bobY+14); mx.lineTo(hx-14,bobY); mx.closePath(); mx.fill();
   }
