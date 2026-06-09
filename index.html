@@ -248,37 +248,61 @@
 // Each domain = a life area with a unit that marches toward its objective town
 const DOMAINS = [
   {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:3,  spawnTy:7,  targetTx:1,  targetTy:2,
-   portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png']},
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:7,  targetTx:11, targetTy:2,  portraits:null},
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:14, targetTx:1,  targetTy:17, portraits:null},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:6,  spawnTy:7,  targetTx:6,  targetTy:3,  portraits:null},
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:14, targetTx:11, targetTy:17, portraits:null},
+   portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null},
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:7,  targetTx:11, targetTy:2,  portraits:null, sheet:null},
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:3,  spawnTy:14, targetTx:1,  targetTy:17, portraits:null, sheet:'fighter_sheet.png'},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:6,  spawnTy:7,  targetTx:6,  targetTy:3,  portraits:null, sheet:null},
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:9,  spawnTy:14, targetTx:11, targetTy:17, portraits:null, sheet:'rogue_sheet.png'},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
 
 // ============ PORTRAITS ============
 const spriteImg = new Image(); spriteImg.src = 'wizard_sprite_16bit.png';
-// Preload portrait images per domain
+// Preload individual portrait images
 const domainPortraitImgs = DOMAINS.map(d => d.portraits ? d.portraits.map(src=>{ const i=new Image(); i.src=src; return i; }) : null);
+// Preload portrait sheets (2×2 grid, top-left=ok, top-right=tired, bot-left=hurt, bot-right=crit)
+const sheetImgs = DOMAINS.map(d=>{ if(!d.sheet) return null; const i=new Image(); i.src=d.sheet; i.onload=()=>updatePortraits(); return i; });
+
+// Draw one quadrant of a portrait sheet onto a canvas element
+// lvl 0=TL 1=TR 2=BL 3=BR
+function drawSheetPortrait(cv,sheetImg,lvl){
+  const g=cv.getContext('2d'),w=cv.width,h=cv.height;
+  g.clearRect(0,0,w,h);
+  if(!sheetImg.complete||!sheetImg.naturalWidth){ g.fillStyle='#111'; g.fillRect(0,0,w,h); return; }
+  const sw=sheetImg.naturalWidth/2, sh=sheetImg.naturalHeight/2;
+  const sx=(lvl===1||lvl===3)?sw:0;
+  const sy=(lvl>=2)?sh:0;
+  g.drawImage(sheetImg,sx,sy,sw,sh,0,0,w,h);
+}
 
 function buildPortraitCol(){
   const col=document.getElementById('portraitCol');
   DOMAINS.forEach((d,i)=>{
     const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
     card.onclick=()=>openFocus(i);
-    if(d.portraits){
-      const img=document.createElement('img'); img.className='portImg'; img.id='portImg'+i; img.alt=d.cls;
-      img.src=d.portraits[0]; card.appendChild(img);
-    } else {
-      const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=56; cv.height=70;
-      drawPortraitPlaceholder(cv,d,0); card.appendChild(cv);
-    }
+    // Always use canvas so we can render sheets, individual images, or placeholders uniformly
+    const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=56; cv.height=70;
+    renderPortraitCanvas(cv,d,i,0);
+    card.appendChild(cv);
     const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; card.appendChild(nm);
     const hw=document.createElement('div'); hw.className='portHPWrap';
     const hf=document.createElement('div'); hf.className='portHPFill'; hf.id='portHP'+i; hw.appendChild(hf); card.appendChild(hw);
     col.appendChild(card);
   });
+}
+
+function renderPortraitCanvas(cv,d,idx,lvl){
+  if(d.sheet && sheetImgs[idx]){
+    drawSheetPortrait(cv,sheetImgs[idx],lvl);
+  } else if(d.portraits && domainPortraitImgs[idx]){
+    const img=domainPortraitImgs[idx][Math.min(lvl,3)];
+    const g=cv.getContext('2d'); g.clearRect(0,0,cv.width,cv.height);
+    if(img.complete&&img.naturalWidth) g.drawImage(img,0,0,cv.width,cv.height);
+    else { img.onload=()=>{ g.drawImage(img,0,0,cv.width,cv.height); }; drawPortraitPlaceholder(cv,d,lvl); }
+  } else {
+    drawPortraitPlaceholder(cv,d,lvl);
+  }
 }
 
 function drawPortraitPlaceholder(cv,d,lvl){
@@ -303,12 +327,7 @@ function drawPortraitPlaceholder(cv,d,lvl){
 function updatePortraits(){
   DOMAINS.forEach((d,i)=>{
     const hp=domainHP(i),lvl=hpLevelOf(hp);
-    // Update image or canvas
-    if(d.portraits){
-      const img=document.getElementById('portImg'+i); if(img) img.src=d.portraits[Math.min(lvl,3)];
-    } else {
-      const cv=document.getElementById('portImg'+i); if(cv) drawPortraitPlaceholder(cv,d,lvl);
-    }
+    const cv=document.getElementById('portImg'+i); if(cv) renderPortraitCanvas(cv,d,i,lvl);
     // Update HP bar
     const hf=document.getElementById('portHP'+i); if(hf){ hf.style.width=hp+'%'; hf.style.backgroundColor=hpColor(hp); }
     // Active state if focus open
