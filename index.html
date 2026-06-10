@@ -146,6 +146,16 @@
   .badge.due{color:#9ad0ff;border-color:#3a5a8a;}
   .badge.over{color:#fff;background:var(--hp-red);border-color:#ff6a6a;}
   .del{flex:0 0 auto;font-family:inherit;font-size:8px;background:#2a0a14;color:#ff8888;border:1px solid #6a2030;padding:4px 6px;cursor:pointer;}
+  /* Habit rows */
+  .habit-row{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;}
+  .habit-top{display:flex;align-items:center;gap:5px;}
+  .habit-week{display:flex;align-items:center;gap:3px;padding:0 6px 4px;}
+  .habit-dots{display:flex;gap:3px;flex:1;}
+  .hdot{width:10px;height:10px;border-radius:2px;border:1px solid #3a3060;background:#0d0b22;cursor:pointer;transition:background .15s;}
+  .hdot.done{background:var(--hdot-col,#44cc44);border-color:var(--hdot-col,#44cc44);}
+  .hdot.today{box-shadow:0 0 0 2px rgba(255,255,255,.4);}
+  .habit-progress{height:3px;background:#070710;border:1px solid #2a2050;flex:1;margin-left:4px;}
+  .habit-progress-fill{height:100%;transition:width .3s;}
 
   /* Game over */
   #gameover{position:fixed;inset:0;background:rgba(20,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:50;text-align:center;padding:20px;}
@@ -223,7 +233,7 @@
         <option value="1">HABIT</option>
         <option value="2">TARGET</option>
       </select></div>
-    <div class="fgroup" id="fgGoal" style="display:none"><label class="flabel" for="taskGoal">GOAL / WK</label>
+    <div class="fgroup" id="fgGoal" style="display:none"><label class="flabel" for="taskGoal" id="fgGoalLabel">GOAL / WK</label>
       <input type="number" id="taskGoal" placeholder="GOAL #" min="1" max="99"></div>
     <div class="fgroup" id="fgDate"><label class="flabel" for="taskDate">DUE DATE (OPTIONAL)</label>
       <input type="date" id="taskDate"></div>
@@ -413,25 +423,34 @@ function isOverdue(t){
 }
 
 // ============ HP + PROGRESS PER DOMAIN ============
+// How many times done this week (habit only)
+function habitWeekCount(t){ return t.type===T_HABIT?(t.weekCount||0):0; }
+function habitGoalMet(t){ return t.type===T_HABIT&&habitWeekCount(t)>=(t.goal||1); }
+function habitGoalHits(t){ return t.type===T_HABIT?(t.weeklyHits||0):0; }
+
 function domainHP(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
   if(!tasks.length) return HP_MAX;
   let hp=HP_MAX;
   tasks.forEach(t=>{
     if(isOverdue(t)) hp-=15;
-    if(t.type===T_HABIT&&!isDoneToday(t)) hp-=5;
+    if(t.type===T_HABIT){
+      // Penalise if more than halfway through the week and goal isn't met
+      const behind=Math.max(0,(t.goal||1)-habitWeekCount(t));
+      hp-=behind*4;
+    }
     if(t.type===T_TARGET){ const short=Math.max(0,(t.goal||1)-(t.count||0)); hp-=short*8; }
   });
   return Math.max(0,Math.min(HP_MAX,hp));
 }
 
-// One step = one "completion event": quest done, habit streak day, or target goal-hit
+// Steps: quest done=1, habit weekly-goal-hits=1 each, target goal-hit=1 each
 function countDomainSteps(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
   let s=0;
   tasks.forEach(t=>{
     if(t.type===T_QUEST) s+=t.done?1:0;
-    else if(t.type===T_HABIT) s+=(t.streak||0);
+    else if(t.type===T_HABIT) s+=habitGoalHits(t);
     else if(t.type===T_TARGET) s+=Math.floor((t.count||0)/(t.goal||1));
   });
   return s;
@@ -452,7 +471,7 @@ function getDomainPendingTasks(idx){
   return state.tasks.filter(t=>{
     if((t.domain||0)!==idx) return false;
     if(t.type===T_QUEST) return !t.done;
-    if(t.type===T_HABIT) return true;
+    if(t.type===T_HABIT) return !habitGoalMet(t); // pending until weekly goal met
     if(t.type===T_TARGET) return (t.count||0)<(t.goal||1);
     return false;
   });
@@ -494,7 +513,19 @@ function recalcHP(){
 }
 function checkWeeklyReset(){
   const mon=mondayStr();
-  state.tasks.forEach(t=>{ if(t.type===T_TARGET&&(!t.weekStart||t.weekStart<mon)){ t.count=0; t.weekStart=mon; } });
+  state.tasks.forEach(t=>{
+    if(t.type===T_TARGET&&(!t.weekStart||t.weekStart<mon)){ t.count=0; t.weekStart=mon; }
+    if(t.type===T_HABIT&&(!t.weekStart||t.weekStart<mon)){
+      // Award a hit if goal was met in the expiring week
+      if(habitWeekCount(t)>=(t.goal||1)){
+        t.weeklyHits=(t.weeklyHits||0)+1;
+        t.wkStreak=(t.wkStreak||0)+1;
+      } else {
+        t.wkStreak=0;
+      }
+      t.weekCount=0; t.lastDone=null; t.weekStart=mon;
+    }
+  });
 }
 function advanceDue(due,days){ const d=due?new Date(due+'T00:00:00'):new Date(); d.setDate(d.getDate()+days); return d.toISOString().split('T')[0]; }
 
@@ -578,21 +609,21 @@ function renderList(){
   sorted.forEach(task=>{
     const over=isOverdue(task);
     const dom=DOMAINS[task.domain||0];
-    const doneToday=task.type===T_HABIT&&isDoneToday(task);
+    const doneToday=isDoneToday(task);
+    if(task.type===T_HABIT){
+      el.appendChild(buildHabitRow(task,dom)); return;
+    }
     const div=document.createElement('div');
     div.className='task domain-'+(task.domain||0)+(over?' overdue':'')+(task.done?' done':'');
     const cb=document.createElement('div');
     if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; cb.title='Log one completion'; }
-    else{ cb.className='cb'+(task.done||doneToday?' checked':''); }
+    else{ cb.className='cb'+(task.done?' checked':''); }
     cb.onclick=()=>toggleTask(task.id);
     const name=document.createElement('div'); name.className='tname'; name.textContent=task.name;
     div.appendChild(cb); div.appendChild(name);
     const meta=document.createElement('div'); meta.className='tmeta';
     const dl=document.createElement('div'); dl.className='tloc'; dl.style.color=dom.color; dl.textContent=dom.name; meta.appendChild(dl);
-    if(task.type===T_HABIT){
-      const tl=document.createElement('div'); tl.className='ttype';
-      tl.textContent=doneToday?'✓ TODAY':(task.streak>1?'↻ '+task.streak+'🔥':'↻ HABIT'); meta.appendChild(tl);
-    } else if(task.type===T_TARGET){
+    if(task.type===T_TARGET){
       const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl);
     }
     div.appendChild(meta);
@@ -603,10 +634,58 @@ function renderList(){
   });
 }
 
+function buildHabitRow(task,dom){
+  const wc=habitWeekCount(task),goal=task.goal||1,goalMet=wc>=goal;
+  const doneToday=isDoneToday(task);
+  const col=dom.color;
+  const div=document.createElement('div');
+  div.className='task domain-'+(task.domain||0)+(goalMet?' done':'');
+  div.style.flexDirection='column'; div.style.gap='0'; div.style.padding='6px 8px 4px';
+
+  // Top row: checkbox + name + hits badge + delete
+  const top=document.createElement('div'); top.className='habit-top';
+  const cb=document.createElement('div');
+  cb.className='cb'+(doneToday?' checked':'');
+  cb.title=doneToday?'Un-check today':'Done today';
+  cb.onclick=()=>toggleTask(task.id);
+  const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
+  const meta=document.createElement('div'); meta.className='tmeta';
+  const dl=document.createElement('div'); dl.className='tloc'; dl.style.color=col; dl.textContent='↻ HABIT'; meta.appendChild(dl);
+  if(task.wkStreak>1){ const s=document.createElement('div'); s.className='ttype'; s.textContent=task.wkStreak+'🔥 WKS'; meta.appendChild(s); }
+  const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(task.id);
+  top.appendChild(cb); top.appendChild(nm); top.appendChild(meta); top.appendChild(del);
+
+  // Week strip: N dots up to goal, today's highlighted
+  const strip=document.createElement('div'); strip.className='habit-week';
+  const dots=document.createElement('div'); dots.className='habit-dots';
+  for(let k=0;k<goal;k++){
+    const dot=document.createElement('div');
+    dot.className='hdot'+(k<wc?' done':'')+(k===wc-1&&doneToday?' today':'');
+    dot.style.setProperty('--hdot-col',col);
+    dots.appendChild(dot);
+  }
+  // Mini progress bar showing wc/goal
+  const pw=document.createElement('div'); pw.className='habit-progress';
+  const pf=document.createElement('div'); pf.className='habit-progress-fill';
+  pf.style.width=Math.min(100,Math.round(wc/goal*100))+'%';
+  pf.style.backgroundColor=goalMet?'#ffd700':col;
+  pw.appendChild(pf);
+  const lbl=document.createElement('span');
+  lbl.style.cssText='font-size:5px;color:'+(goalMet?'#ffd700':col)+';white-space:nowrap;margin-left:4px;';
+  lbl.textContent=goalMet?'✓ GOAL':''+wc+'/'+goal;
+  strip.appendChild(dots); strip.appendChild(pw); strip.appendChild(lbl);
+
+  div.appendChild(top); div.appendChild(strip);
+  return div;
+}
+
 // ============ ACTIONS ============
 function addTask(name,domain,type,goal,due){
   const di=parseInt(domain)||0, ti=parseInt(type)||0;
-  state.tasks.push({id:Date.now()+Math.random(),name,domain:di,type:ti,goal:parseInt(goal)||1,count:0,weekStart:mondayStr(),streak:0,lastDone:null,due:due||null,done:false});
+  const g=parseInt(goal)||1;
+  const base={id:Date.now()+Math.random(),name,domain:di,type:ti,goal:g,weekStart:mondayStr(),due:due||null,done:false};
+  const extra=ti===T_HABIT?{weekCount:0,weeklyHits:0,wkStreak:0,lastDone:null}:{count:0,streak:0,lastDone:null};
+  state.tasks.push(Object.assign(base,extra));
   recalcHP();save();refresh();
   // Feedback: toast + sparkle at the unit + portrait flash
   const d=DOMAINS[di];
@@ -625,13 +704,26 @@ function toggleTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   const d=DOMAINS[t.domain||0];
   if(t.type===T_HABIT){
+    const wasGoalMet=habitGoalMet(t);
     if(!isDoneToday(t)){
-      const yest=new Date(); yest.setDate(yest.getDate()-1);
-      const yStr=yest.toISOString().split('T')[0];
-      t.streak=(t.lastDone===yStr)?(t.streak||0)+1:1;
-      t.lastDone=todayStr(); state.hp=Math.min(HP_MAX,state.hp+5);
+      t.weekCount=(t.weekCount||0)+1;
+      t.lastDone=todayStr();
+      state.hp=Math.min(HP_MAX,state.hp+3);
       sparkleAt(unitPos[t.domain||0].x,unitPos[t.domain||0].y);
-    } else { t.lastDone=null; t.streak=Math.max(0,(t.streak||1)-1); }
+      // Goal hit this week — big reward
+      if(!wasGoalMet&&habitGoalMet(t)){
+        state.hp=Math.min(HP_MAX,state.hp+12);
+        const di=t.domain||0;
+        showToast('🔥 HABIT GOAL MET — '+d.cls+' ADVANCES!',d.color);
+        for(let k=0;k<3;k++) setTimeout(()=>sparkleAt(unitPos[di].x,unitPos[di].y),k*200);
+        const pc=document.getElementById('pc'+di);
+        if(pc){ pc.classList.remove('flash'); void pc.offsetWidth; pc.classList.add('flash'); }
+      }
+    } else {
+      // Un-check today
+      t.weekCount=Math.max(0,(t.weekCount||1)-1);
+      t.lastDone=null;
+    }
   } else if(t.type===T_TARGET){
     t.count=(t.count||0)+1; state.hp=Math.min(HP_MAX,state.hp+3);
     if(t.count>=t.goal) sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
@@ -1261,7 +1353,10 @@ function loop(time){ drawMap(time); requestAnimationFrame(loop); }
 // ============ FORM ============
 function updateFormFields(){
   const type=parseInt(document.getElementById('taskType').value);
-  document.getElementById('fgGoal').style.display=type===T_TARGET?'':'none';
+  const showGoal=type===T_TARGET||type===T_HABIT;
+  document.getElementById('fgGoal').style.display=showGoal?'':'none';
+  document.getElementById('fgGoalLabel').textContent=type===T_HABIT?'TIMES / WEEK':'GOAL / WK';
+  document.getElementById('taskGoal').placeholder=type===T_HABIT?'DAYS / WK':'GOAL #';
   document.getElementById('fgDate').style.display=type===T_QUEST?'':'none';
 }
 document.getElementById('taskType').addEventListener('change',updateFormFields);
@@ -1376,18 +1471,25 @@ function renderFocusPanel(){
   const body=document.getElementById('focusBody'); body.innerHTML='';
   const tasks=state.tasks.filter(t=>(t.domain||0)===focusIdx);
   if(!tasks.length){ body.innerHTML='<div class="empty">NO TASKS YET</div>'; return; }
+  const dom2=DOMAINS[focusIdx];
   tasks.forEach(task=>{
-    const over=isOverdue(task),doneToday=task.type===T_HABIT&&isDoneToday(task);
+    if(task.type===T_HABIT){
+      const row=buildHabitRow(task,dom2);
+      // rewire callbacks to also refresh focus panel
+      row.querySelectorAll('.cb').forEach(cb=>{ const orig=cb.onclick; cb.onclick=()=>{ orig&&orig(); renderFocusPanel(); }; });
+      row.querySelectorAll('.del').forEach(d=>{ const orig=d.onclick; d.onclick=()=>{ orig&&orig(); renderFocusPanel(); }; });
+      body.appendChild(row); return;
+    }
+    const over=isOverdue(task);
     const div=document.createElement('div');
     div.className='task domain-'+focusIdx+(over?' overdue':'')+(task.done?' done':'');
     const cb=document.createElement('div');
     if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; }
-    else { cb.className='cb'+(task.done||doneToday?' checked':''); }
+    else { cb.className='cb'+(task.done?' checked':''); }
     cb.onclick=()=>{ toggleTask(task.id); renderFocusPanel(); };
     const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
     const meta=document.createElement('div'); meta.className='tmeta';
-    if(task.type===T_HABIT){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=doneToday?'✓ TODAY':(task.streak>1?'↻ '+task.streak+'🔥':'↻ HABIT'); meta.appendChild(tl); }
-    else if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
+    if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>{ deleteTask(task.id); renderFocusPanel(); };
     div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); div.appendChild(del);
     body.appendChild(div);
@@ -1410,16 +1512,17 @@ function renderCheckin(){
     if(!tasks.length) return;
     const sect=document.createElement('div'); sect.className='ck-sect'; sect.style.color=d.color; sect.textContent=d.cls+' — '+d.name; list.appendChild(sect);
     tasks.forEach(task=>{
-      const doneToday=task.type===T_HABIT&&isDoneToday(task);
-      const div=document.createElement('div'); div.className='task domain-'+di+(task.done||doneToday?' done':'');
-      const cb=document.createElement('div');
-      if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; }
-      else { cb.className='cb'+(doneToday?' checked':''); }
+      if(task.type===T_HABIT){
+        const row=buildHabitRow(task,d);
+        row.querySelectorAll('.cb').forEach(cb=>{ const orig=cb.onclick; cb.onclick=()=>{ orig&&orig(); renderCheckin(); }; });
+        list.appendChild(row); return;
+      }
+      const div=document.createElement('div'); div.className='task domain-'+di+(task.done?' done':'');
+      const cb=document.createElement('div'); cb.className='cb'+(task.done?' checked':''); cb.textContent='+';
       cb.onclick=()=>{ toggleTask(task.id); renderCheckin(); };
       const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
       const meta=document.createElement('div'); meta.className='tmeta';
-      if(task.type===T_HABIT){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=doneToday?'✓ TODAY':'↻ HABIT'; meta.appendChild(tl); }
-      else if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
+      if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
       div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); list.appendChild(div);
     });
   });
