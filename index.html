@@ -164,6 +164,18 @@
   .habit-progress{height:3px;background:#070710;border:1px solid #2a2050;flex:1;margin-left:4px;}
   .habit-progress-fill{height:100%;transition:width .3s;}
 
+  /* Edit task modal */
+  #editWrap{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:45;display:none;align-items:center;justify-content:center;padding:16px;}
+  #editWrap.open{display:flex;}
+  #editBox{width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px;padding:14px;}
+  #editBox input{font-family:inherit;font-size:9px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:10px 8px;outline:none;width:100%;}
+  #editBox input:focus{border-color:var(--gold);}
+  #editSave{font-family:inherit;font-size:8px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:10px;cursor:pointer;letter-spacing:1px;flex:1;}
+  #editCancel{font-family:inherit;font-size:8px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:10px;cursor:pointer;letter-spacing:1px;flex:0 0 auto;}
+  .edit-btn{flex:0 0 auto;font-family:inherit;font-size:8px;background:#141228;color:#9a8ad0;border:1px solid #3a3060;padding:4px 6px;cursor:pointer;}
+  .edit-btn:hover{color:var(--gold);border-color:var(--gold);}
+  @media(max-width:600px){ .edit-btn{padding:10px 12px;font-size:10px;} }
+
   /* Game over */
   #gameover{position:fixed;inset:0;background:rgba(20,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:50;text-align:center;padding:20px;}
   #gameover.show{display:flex;}
@@ -288,6 +300,23 @@
     <div class="ck-sub" id="checkinDate"></div>
     <div id="checkinList"></div>
     <button id="checkinSubmit" onclick="submitCheckin()">SUBMIT REPORT</button>
+  </div>
+</div>
+
+<div id="editWrap" onclick="if(event.target===this)closeEdit()">
+  <div id="editBox" class="glass">
+    <div class="ck-title">EDIT TASK</div>
+    <div class="ck-sub" id="editKind"></div>
+    <div class="fgroup"><label class="flabel" for="editName">TASK NAME</label>
+      <input type="text" id="editName" maxlength="60"></div>
+    <div class="fgroup" id="editGoalGrp"><label class="flabel" for="editGoal" id="editGoalLabel">GOAL / WK</label>
+      <input type="number" id="editGoal" min="1" max="99"></div>
+    <div class="fgroup" id="editDateGrp"><label class="flabel" for="editDate">DUE DATE (OPTIONAL)</label>
+      <input type="date" id="editDate"></div>
+    <div style="display:flex;gap:6px;">
+      <button id="editSave" onclick="saveEdit()">✓ SAVE</button>
+      <button id="editCancel" onclick="closeEdit()">CANCEL</button>
+    </div>
   </div>
 </div>
 
@@ -662,6 +691,7 @@ function renderList(){
     if(over){ const sn=document.createElement('button'); sn.className='del'; sn.style.color='#ffcc66'; sn.style.borderColor='#8a6a20'; sn.style.background='#1a1408'; sn.textContent='+1D'; sn.title='Snooze: move due date to tomorrow'; sn.onclick=()=>snoozeTask(task.id); div.appendChild(sn); }
     if(task.type===T_TARGET){ const badge=document.createElement('div'); const pct=Math.min(100,Math.round(((task.count||0)/(task.goal||1))*100)); badge.className='badge due'; badge.style.color=hpColor(pct); badge.style.borderColor=hpColor(pct); badge.textContent=pct+'%'; div.appendChild(badge); }
     if(task.type===T_TARGET&&(task.count||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo one completion'; minus.onclick=()=>decTarget(task.id); div.appendChild(minus); }
+    div.appendChild(editBtn(task.id));
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(task.id); div.appendChild(del);
     el.appendChild(div);
   });
@@ -687,7 +717,7 @@ function buildHabitRow(task,dom){
   const dl=document.createElement('div'); dl.className='tloc'; dl.style.color=col; dl.textContent='↻ HABIT'; meta.appendChild(dl);
   if(task.wkStreak>1){ const s=document.createElement('div'); s.className='ttype'; s.textContent=task.wkStreak+'🔥 WKS'; meta.appendChild(s); }
   const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(task.id);
-  top.appendChild(cb); top.appendChild(nm); top.appendChild(meta); top.appendChild(del);
+  top.appendChild(cb); top.appendChild(nm); top.appendChild(meta); top.appendChild(editBtn(task.id)); top.appendChild(del);
 
   // Week strip: N dots up to goal, today's highlighted
   const strip=document.createElement('div'); strip.className='habit-week';
@@ -770,6 +800,54 @@ function toggleTask(id){
   recalcHP();save();refresh();
 }
 // Undo a target tap (mis-click protection)
+// ============ TASK EDITING ============
+// Edits name/goal/due in place — streaks, counts, and weekly hits survive
+let editId=null;
+function openEdit(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  editId=id;
+  const kind=t.type===T_HABIT?'HABIT':t.type===T_TARGET?'TARGET':'QUEST';
+  const d=DOMAINS[t.domain||0];
+  const ek=document.getElementById('editKind');
+  ek.textContent=kind+' — '+d.name; ek.style.color=d.color;
+  document.getElementById('editName').value=t.name;
+  const gg=document.getElementById('editGoalGrp');
+  gg.style.display=t.type===T_QUEST?'none':'';
+  document.getElementById('editGoalLabel').textContent=t.type===T_HABIT?'TIMES / WEEK':'GOAL / WK';
+  document.getElementById('editGoal').value=t.goal||1;
+  document.getElementById('editDateGrp').style.display=t.type===T_QUEST?'':'none';
+  document.getElementById('editDate').value=t.due||'';
+  document.getElementById('editWrap').classList.add('open');
+  document.getElementById('editName').focus();
+}
+function closeEdit(){ editId=null; document.getElementById('editWrap').classList.remove('open'); }
+function saveEdit(){
+  const t=state.tasks.find(x=>x.id===editId); if(!t){ closeEdit(); return; }
+  const name=document.getElementById('editName').value.trim();
+  if(name) t.name=name;
+  if(t.type!==T_QUEST){
+    const g=parseInt(document.getElementById('editGoal').value);
+    if(g>=1&&g<=99) t.goal=g;
+  } else {
+    t.due=document.getElementById('editDate').value||null;
+  }
+  closeEdit();
+  recalcHP();save();refresh();
+  if(focusIdx!==null) renderFocusPanel();
+  showToast('✎ TASK UPDATED');
+}
+function editBtn(id){
+  const b=document.createElement('button'); b.className='edit-btn'; b.textContent='✎';
+  b.title='Edit task'; b.onclick=()=>openEdit(id);
+  return b;
+}
+['editName','editGoal','editDate'].forEach(eid=>{
+  document.getElementById(eid).addEventListener('keydown',e=>{
+    if(e.key==='Enter') saveEdit();
+    else if(e.key==='Escape') closeEdit();
+  });
+});
+
 // Snooze a single overdue quest to tomorrow (Rally does this globally)
 function snoozeTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||!isOverdue(t)) return;
@@ -1613,7 +1691,7 @@ function renderFocusPanel(){
     if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
     if(task.type===T_TARGET&&(task.count||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo one completion'; minus.onclick=()=>{ decTarget(task.id); renderFocusPanel(); }; div.appendChild(minus); }
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>{ deleteTask(task.id); renderFocusPanel(); };
-    div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); div.appendChild(del);
+    div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); div.appendChild(editBtn(task.id)); div.appendChild(del);
     body.appendChild(div);
   });
 }
