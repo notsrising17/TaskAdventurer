@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Task Adventurer</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TaskAdv">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -191,6 +197,16 @@
     #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
     .task{min-height:48px;padding:6px 8px;}.cb{width:26px;height:26px;flex:0 0 26px;}
     .del{padding:10px 12px;font-size:10px;}
+  }
+
+  /* Respect OS-level reduced-motion preference */
+  @media(prefers-reduced-motion:reduce){
+    .portCard.flash{animation:none;}
+    .status-badge.blink{animation:none;opacity:1;}
+    .cb.checked::after{animation:none;}
+    #focusPanel{transition:none;}
+    #toast{transition:opacity .1s;}
+    .bar,.dbar,.portHPFill,.habit-progress-fill,#focusHPFill{transition:none;}
   }
 </style>
 </head>
@@ -406,15 +422,24 @@ function isDoneToday(t){ return t.lastDone===todayStr(); }
 const HP_MAX=100;
 let state={hp:HP_MAX, tasks:[], name:'HERO', captures:[0,0,0,0,0]};
 
+// Bump when the task shape changes; add a migration case in migrate()
+const SCHEMA_VERSION=1;
+function migrate(fromVersion){
+  // switch(fromVersion){ case 1: ...mutate state.tasks...; }
+  // Versions run sequentially: 1→2, 2→3, etc.
+}
 function load(){
   try{
     const t=JSON.parse(localStorage.getItem('ta_tasks')||'[]'); if(Array.isArray(t)) state.tasks=t;
     state.name=(localStorage.getItem('ta_name')||'HERO').toUpperCase();
     const c=JSON.parse(localStorage.getItem('ta_caps')||'[]'); if(Array.isArray(c)) state.captures=DOMAINS.map((_,i)=>c[i]||0);
+    let v=parseInt(localStorage.getItem('ta_version'))||1;
+    while(v<SCHEMA_VERSION){ migrate(v); v++; }
   }catch(e){}
 }
 function save(){
   try{
+    localStorage.setItem('ta_version',String(SCHEMA_VERSION));
     localStorage.setItem('ta_tasks',JSON.stringify(state.tasks));
     localStorage.setItem('ta_name',state.name);
     localStorage.setItem('ta_caps',JSON.stringify(state.captures));
@@ -492,7 +517,7 @@ function checkCaptures(){
       save();
       // Ceremony: banner, screen flash, burst of sparkles at the building
       showToast('🏆 '+d.dest+' CAPTURED BY '+d.cls+'!',d.color);
-      flashT=18;
+      if(!REDUCED_MOTION) flashT=18;
       const bx=d.targetTx*TS+TS/2,by=d.targetTy*TS+TS/2;
       for(let k=0;k<3;k++) setTimeout(()=>sparkleAt(bx,by),k*350);
       const pc=document.getElementById('pc'+i);
@@ -634,6 +659,7 @@ function renderList(){
     }
     div.appendChild(meta);
     if(task.type===T_QUEST&&task.due){ const badge=document.createElement('div'); badge.className=over?'badge over':'badge due'; badge.textContent=over?'OVERDUE':fmtDue(task.due); div.appendChild(badge); }
+    if(over){ const sn=document.createElement('button'); sn.className='del'; sn.style.color='#ffcc66'; sn.style.borderColor='#8a6a20'; sn.style.background='#1a1408'; sn.textContent='+1D'; sn.title='Snooze: move due date to tomorrow'; sn.onclick=()=>snoozeTask(task.id); div.appendChild(sn); }
     if(task.type===T_TARGET){ const badge=document.createElement('div'); const pct=Math.min(100,Math.round(((task.count||0)/(task.goal||1))*100)); badge.className='badge due'; badge.style.color=hpColor(pct); badge.style.borderColor=hpColor(pct); badge.textContent=pct+'%'; div.appendChild(badge); }
     if(task.type===T_TARGET&&(task.count||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo one completion'; minus.onclick=()=>decTarget(task.id); div.appendChild(minus); }
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(task.id); div.appendChild(del);
@@ -670,6 +696,10 @@ function buildHabitRow(task,dom){
     const dot=document.createElement('div');
     dot.className='hdot'+(k<wc?' done':'')+(k===wc-1&&doneToday?' today':'');
     dot.style.setProperty('--hdot-col',col);
+    // Tappable: next empty dot logs today; today's filled dot un-logs it
+    if(k===wc&&!doneToday){ dot.title='Log today'; dot.onclick=()=>toggleTask(task.id); a11y(dot,'Log today: '+task.name); }
+    else if(k===wc-1&&doneToday){ dot.title='Un-log today'; dot.onclick=()=>toggleTask(task.id); a11y(dot,'Un-log today: '+task.name); }
+    else dot.style.cursor='default';
     dots.appendChild(dot);
   }
   // Mini progress bar showing wc/goal
@@ -740,6 +770,13 @@ function toggleTask(id){
   recalcHP();save();refresh();
 }
 // Undo a target tap (mis-click protection)
+// Snooze a single overdue quest to tomorrow (Rally does this globally)
+function snoozeTask(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t||!isOverdue(t)) return;
+  t.due=advanceDue(null,1);
+  recalcHP();save();refresh();
+  showToast('⏰ SNOOZED TO TOMORROW — '+t.name.toUpperCase().slice(0,24));
+}
 function decTarget(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||t.type!==T_TARGET) return;
   t.count=Math.max(0,(t.count||0)-1);
@@ -760,7 +797,7 @@ function a11y(el,label){
 // Everything lives in localStorage, which browsers can evict — give the
 // player a real save file
 function exportData(){
-  const payload={version:1,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:localStorage.getItem('ta_checkin')||null};
+  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:localStorage.getItem('ta_checkin')||null};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -776,6 +813,8 @@ function importData(file){
       const p=JSON.parse(r.result);
       if(!Array.isArray(p.tasks)) throw new Error('bad file');
       state.tasks=p.tasks;
+      let v=parseInt(p.version)||1;
+      while(v<SCHEMA_VERSION){ migrate(v); v++; }
       state.name=((p.name||'HERO')+'').toUpperCase().slice(0,12);
       state.captures=DOMAINS.map((_,i)=>(p.captures&&p.captures[i])||0);
       if(p.checkin) localStorage.setItem('ta_checkin',p.checkin);
@@ -898,7 +937,8 @@ function buildMap(){
   return m;
 }
 
-function sparkleAt(x,y){ for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,t:0}); }
+const REDUCED_MOTION=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function sparkleAt(x,y){ if(REDUCED_MOTION) return; for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,t:0}); }
 function fitMap(){
   // Render at device resolution (capped at 2x) so canvas text is crisp on retina;
   // CSS keeps display size at 100%, all draw math derives from mc.width/height
@@ -1348,7 +1388,7 @@ function drawMap(time){
   DOMAINS.forEach((d,i)=>{
     const prog=domainProgress(i),hp=domainHP(i);
     const target=domainCurrentStep(i);
-    if(visSteps[i]>target) visSteps[i]=target; // un-check / capture reset: snap back
+    if(visSteps[i]>target||REDUCED_MOTION) visSteps[i]=target; // snap: un-check, capture reset, or reduced motion
     else if(visSteps[i]<target) visSteps[i]=Math.min(target,visSteps[i]+STEP_SPEED);
     const s0=Math.floor(visSteps[i]), frac=visSteps[i]-s0;
     const [ax2,ay2]=unitTileXY(i,s0);
@@ -1654,6 +1694,12 @@ document.getElementById('importFile').addEventListener('change',e=>{ if(e.target
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ recalcHP(); save(); refresh(); updateCheckinBtn(); } });
 requestAnimationFrame(loop);
 setInterval(()=>{ recalcHP(); save(); refresh(); },3600*1000);
+// PWA: offline support + home-screen install; also requests persistent
+// storage so iOS/Android don't evict localStorage after 7 days idle
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+if(navigator.storage&&navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 </script>
 </body>
 </html>
