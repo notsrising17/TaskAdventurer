@@ -609,7 +609,7 @@ const META_KEY='ta_meta';
 function metaDefaults(){
   return {tokens:0,pins:{date:'',ids:[]},lastSeen:null,camped:false,
     critMiss:0,critBonus:[0,0,0,0,0],msBase:[0,0,0,0,0],msInit:false,
-    offers:[],celebrated:''};
+    offers:[],celebrated:'',stripDate:'',stripIds:[]};
 }
 let META=metaDefaults();
 function loadMeta(){
@@ -1256,11 +1256,29 @@ function stripSatisfied(t){
   if(t.type===T_QUEST) return t.done||t.lastDone===todayStr()||(t.due&&t.due>todayStr());
   return isDoneToday(t);
 }
+// Today's encounters are chosen once per local date and stay fixed —
+// completing one must not pull a fresh obligation out of the backlog.
+// Pins join (front of the line, still capped at 3); deletions just shrink.
+function todayStripIds(){
+  const today=todayStr();
+  if(META.stripDate!==today){
+    META.stripDate=today;
+    META.stripIds=stripCandidates().map(t=>t.id);
+    saveMeta();
+  }
+  let ids=(META.stripIds||[]).filter(id=>state.tasks.some(t=>t.id===id));
+  pinnedToday().slice().reverse().forEach(id=>{
+    if(!ids.includes(id)&&state.tasks.some(t=>t.id===id)) ids.unshift(id);
+  });
+  ids=ids.slice(0,3);
+  if(ids.join()!==(META.stripIds||[]).join()){ META.stripIds=ids; saveMeta(); }
+  return ids;
+}
 let lastStripIds=[];
 function maybeCelebrateStrip(){
   const today=todayStr();
-  if(META.celebrated===today||!lastStripIds.length) return;
-  const items=lastStripIds.map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
+  if(META.celebrated===today||META.stripDate!==today||!(META.stripIds||[]).length) return;
+  const items=META.stripIds.map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
   if(!items.length||!items.every(stripSatisfied)) return;
   META.celebrated=today; saveMeta();
   showToast('⭐ ALL ENCOUNTERS CLEARED — THE PARTY FEASTS!','#ffd700');
@@ -1294,7 +1312,7 @@ function buildTodayStrip(){
   const ttl=document.createElement('span'); ttl.className='dgCls'; ttl.style.color='var(--gold)';
   ttl.textContent="⚔ TODAY'S ENCOUNTERS";
   head.appendChild(ttl); grp.appendChild(head);
-  const cands=stripCandidates();
+  const cands=todayStripIds().map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
   lastStripIds=cands.map(t=>t.id);
   if(!cands.length){
     const ok=document.createElement('div'); ok.className='empty';
