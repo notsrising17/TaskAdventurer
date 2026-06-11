@@ -108,7 +108,10 @@
     display:flex;flex-direction:column;gap:8px;
     transform:translateY(100%);transition:transform .25s cubic-bezier(.2,0,0,1);}
   #focusPanel.open{transform:translateY(0);}
-  #focusHead{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:1px solid #2a2050;}
+  #focusHead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding-bottom:8px;border-bottom:1px solid #2a2050;}
+  #focusAvatar{width:88px;height:88px;flex:0 0 88px;border:2px solid #4a3a8a;image-rendering:pixelated;background:#070710;}
+  #focusStep{font-size:6px;color:var(--gold);margin-top:5px;letter-spacing:1px;}
+  #focusPath{width:100%;display:block;image-rendering:pixelated;background:rgba(7,7,16,.6);border:1px solid #2a2050;}
   #focusCls{font-size:5px;color:#9a8ad0;letter-spacing:2px;}
   #focusName{font-size:12px;color:var(--gold);margin:3px 0 2px;}
   #focusDest{font-size:5px;color:#888;letter-spacing:1px;}
@@ -232,13 +235,16 @@
 <div id="focusBg" onclick="closeFocus()"></div>
 <div id="focusPanel" class="glass">
   <div id="focusHead">
-    <div>
+    <canvas id="focusAvatar" width="160" height="160"></canvas>
+    <div style="flex:1;min-width:0;">
       <div id="focusCls"></div>
       <div id="focusName"></div>
       <div id="focusDest"></div>
+      <div id="focusStep"></div>
     </div>
     <button class="fclose" onclick="closeFocus()">✕</button>
   </div>
+  <canvas id="focusPath" height="76"></canvas>
   <div id="focusHPRow">HP <div id="focusHPBar"><div id="focusHPFill"></div></div><span id="focusHPVal"></span></div>
   <div id="focusBody"></div>
   <button id="focusAddBtn" onclick="focusAddTask()">+ ADD TASK TO THIS DOMAIN</button>
@@ -1293,6 +1299,62 @@ function toggleForm(){
 
 // ============ DOMAIN FOCUS ============
 let focusIdx=null;
+// Journey strip: every tile of the path laid out left-to-right with
+// start banner, walked tiles, the unit, pending-task flags, destination
+function drawFocusPath(idx){
+  const cv=document.getElementById('focusPath');
+  const d=DOMAINS[idx],tiles=DOMAIN_TILES[idx],N=tiles.length;
+  const W=cv.width=Math.max(320,cv.clientWidth||320), H=cv.height;
+  const g=cv.getContext('2d');
+  g.clearRect(0,0,W,H);
+  const step=domainCurrentStep(idx);
+  const pending=getDomainPendingTasks(idx);
+  const pad=14, destW=44;
+  const tw=Math.min(24,(W-pad*2-destW)/(N+1)); // tile cell width
+  const ty=H/2-tw/2+6;
+  // Start banner
+  const sx=pad;
+  g.strokeStyle='#bbb'; g.lineWidth=1.5;
+  g.beginPath(); g.moveTo(sx+4,ty+tw); g.lineTo(sx+4,ty-6); g.stroke();
+  g.fillStyle='#ffd700';
+  g.beginPath(); g.moveTo(sx+4,ty-6); g.lineTo(sx+14,ty-2); g.lineTo(sx+4,ty+2); g.closePath(); g.fill();
+  // Tiles
+  for(let k=0;k<N;k++){
+    const x=pad+tw*0.8+ (k)*tw;
+    const walked=k<step;
+    g.fillStyle=walked?d.color+'88':'#141228';
+    g.fillRect(x+1,ty+1,tw-2,tw-2);
+    g.strokeStyle=walked?d.color:'#2a2050'; g.lineWidth=1;
+    g.strokeRect(x+1,ty+1,tw-2,tw-2);
+    // Pending-task flag on upcoming tiles
+    const pi=k-step;
+    if(pi>=0&&pi<pending.length){
+      const t=pending[pi];
+      const fc=t.type===T_QUEST?'#ffe040':t.type===T_HABIT?'#44eeff':'#ff9944';
+      const fx=x+tw/2;
+      g.fillStyle=d.color; g.fillRect(fx-1,ty-8,2,9);
+      g.fillStyle=fc;
+      g.beginPath(); g.moveTo(fx,ty-8); g.lineTo(fx+8,ty-4.5); g.lineTo(fx,ty-1); g.closePath(); g.fill();
+    }
+  }
+  // Unit sprite at current tile (or start)
+  const ux=step<=0?sx+4:pad+tw*0.8+(step-1)*tw+tw/2;
+  const sImg=domainSpriteImgs[idx];
+  const sw=Math.max(tw+8,24);
+  if(sImg&&sImg.complete&&sImg.naturalWidth>0) g.drawImage(sImg,ux-sw/2,ty+tw-sw-2,sw,sw);
+  else { g.fillStyle=d.color; g.beginPath(); g.arc(ux,ty+tw/2,tw/2,0,7); g.fill(); }
+  // Destination
+  const dx2=pad+tw*0.8+N*tw+6;
+  g.fillStyle=isCaptured(idx)?d.color:'#3a3050';
+  g.fillRect(dx2,ty-4,18,tw+4);
+  g.fillStyle=isCaptured(idx)?d.dark:'#1a1430';
+  g.beginPath(); g.moveTo(dx2-2,ty-4); g.lineTo(dx2+9,ty-14); g.lineTo(dx2+20,ty-4); g.closePath(); g.fill();
+  g.fillStyle=isCaptured(idx)?'#ffe840':'#888'; g.font='8px serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText('★',dx2+9,ty+tw/2-2);
+  g.fillStyle=d.color; g.font='5px "Press Start 2P",monospace'; g.textBaseline='top';
+  const dn=d.dest.length>10?d.dest.slice(0,9)+'…':d.dest;
+  g.fillText(dn,Math.min(W-dn.length*3,dx2+9),ty+tw+4);
+}
 function openFocus(idx){ focusIdx=idx; renderFocusPanel(); document.getElementById('focusPanel').classList.add('open'); document.getElementById('focusBg').classList.add('open'); }
 function closeFocus(){ focusIdx=null; document.getElementById('focusPanel').classList.remove('open'); document.getElementById('focusBg').classList.remove('open'); }
 function focusAddTask(){ if(focusIdx===null) return; document.getElementById('taskDomain').value=focusIdx; closeFocus(); document.getElementById('taskName').focus(); }
@@ -1302,6 +1364,13 @@ function renderFocusPanel(){
   document.getElementById('focusCls').textContent=d.cls+' CLASS';
   document.getElementById('focusName').textContent=d.name; document.getElementById('focusName').style.color=d.color;
   document.getElementById('focusDest').textContent='► '+d.dest;
+  const fstep=domainCurrentStep(focusIdx),ftot=DOMAIN_TILES[focusIdx].length;
+  const caps=(state.captures&&state.captures[focusIdx])||0;
+  document.getElementById('focusStep').textContent='STEP '+fstep+'/'+ftot+(caps>0?'  ★'.repeat(Math.min(caps,5)):'');
+  const av=document.getElementById('focusAvatar');
+  renderPortraitCanvas(av,d,focusIdx,hpLevelOf(hp));
+  av.style.borderColor=d.color;
+  drawFocusPath(focusIdx);
   document.getElementById('focusHPVal').textContent=hp+'%';
   const fill=document.getElementById('focusHPFill'); fill.style.width=hp+'%'; fill.style.backgroundColor=hpColor(hp);
   const body=document.getElementById('focusBody'); body.innerHTML='';
