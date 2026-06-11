@@ -869,7 +869,8 @@ const META_KEY='ta_meta';
 function metaDefaults(){
   return {tokens:0,pins:{date:'',ids:[]},lastSeen:null,camped:false,
     critMiss:0,critBonus:[0,0,0,0,0],msBase:[0,0,0,0,0],msInit:false,
-    offers:[],celebrated:'',stripDate:'',stripIds:[],welcomed:false};
+    offers:[],celebrated:'',stripDate:'',stripIds:[],welcomed:false,
+    sqHistory:[],sqDate:'',sqId:'',sqRerolled:false,sqDone:false};
 }
 let META=metaDefaults();
 function loadMeta(){
@@ -889,7 +890,8 @@ const LANDMARK_EVERY=5;
 function expDefaults(){
   return {week:'',leagues:0,reps:0,ledger:[],gold:0,best:0,
     upgrades:{trailhead:0,lucky:0,mule:0,banners:[]},
-    lastLeader:0,pending:null,pendingConvert:0,converted:false};
+    lastLeader:0,pending:null,pendingConvert:0,converted:false,
+    town:{castleTier:1,plots:{}},deeds:[0,0,0,0,0]};
 }
 let EXPEDITION=expDefaults();
 function loadExp(){
@@ -984,7 +986,7 @@ function checkExpeditionWeek(){
 }
 
 // Bump when the task shape changes; add a migration case in migrate()
-const SCHEMA_VERSION=5;
+const SCHEMA_VERSION=6;
 function migrate(fromVersion){
   // Versions run sequentially: 1→2, 2→3, etc. Each case must be idempotent.
   switch(fromVersion){
@@ -1046,6 +1048,28 @@ function migrate(fromVersion){
         EXPEDITION.converted=true;
         saveExp();
       }
+      break;
+    case 5: // v6: town + deeds + side quest meta
+      if(!EXPEDITION.town) EXPEDITION.town={castleTier:1,plots:{}};
+      if(!EXPEDITION.deeds) EXPEDITION.deeds=[0,0,0,0,0];
+      if(!META.sqHistory) META.sqHistory=[];
+      if(META.sqDate===undefined) META.sqDate='';
+      if(META.sqId===undefined) META.sqId='';
+      if(META.sqRerolled===undefined) META.sqRerolled=false;
+      if(META.sqDone===undefined) META.sqDone=false;
+      // Backfill deeds from event log
+      {
+        const deeds=[0,0,0,0,0];
+        (state.events||[]).forEach(e=>{
+          const t=state.tasks.find(x=>x.id===e.id);
+          const di=t?(t.domain||0):-1;
+          if(di<0||di>4) return;
+          if(e.ev==='done'||e.ev==='habit'||e.ev==='target') deeds[di]++;
+          else if(e.ev==='undone'||e.ev==='unhabit'||e.ev==='untarget') deeds[di]--;
+        });
+        EXPEDITION.deeds=deeds.map(v=>Math.max(0,v));
+      }
+      saveExp(); saveMeta();
       break;
   }
 }

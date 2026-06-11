@@ -48,7 +48,7 @@ let r = await page.evaluate(() => {
     msInit: META.msInit,
   };
 });
-check('migration: version bumped to 5', r.version === '5', r.version);
+check('migration: version bumped to 5', r.version === '6', r.version);
 check('migration: weekLog seeded from wkStreak (3 hits)', r.weekLogHits >= 3 && r.weekLogLen >= 3, JSON.stringify(r));
 check('migration: snoozeCount initialized', r.snooze === 0, r.snooze);
 check('migration: msBase records pre-existing milestones', r.msBase === '0,2,0,0,0', r.msBase);
