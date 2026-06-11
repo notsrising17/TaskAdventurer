@@ -21,11 +21,11 @@
 
   /* Portrait column */
   #portraitCol{position:fixed;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:5;}
-  .portCard{width:64px;display:flex;flex-direction:column;align-items:center;padding:4px;cursor:pointer;
+  .portCard{width:80px;display:flex;flex-direction:column;align-items:center;padding:4px;cursor:pointer;
     border:1px solid #2a2050;background:rgba(10,8,28,.85);transition:border-color .2s;}
   .portCard:hover,.portCard.active{border-color:var(--gold);}
-  .portImg{width:56px;height:70px;object-fit:cover;object-position:center top;display:block;image-rendering:pixelated;}
-  .portCanvas{width:56px;height:70px;display:block;image-rendering:pixelated;}
+  .portImg{width:72px;height:90px;object-fit:cover;object-position:center top;display:block;image-rendering:pixelated;}
+  .portCanvas{width:72px;height:90px;display:block;image-rendering:pixelated;}
   .portName{font-size:4px;color:var(--gold);letter-spacing:.5px;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;width:100%;text-overflow:ellipsis;}
   .portHPWrap{width:100%;height:3px;background:#070710;margin-top:2px;}
   .portHPFill{height:100%;transition:width .3s,background-color .3s;}
@@ -148,7 +148,7 @@
     /* center form over map */
     #formToggle{bottom:calc(40vh + 10px);}
     #formPanel{bottom:calc(40vh + 52px);}
-    #listPanel{left:80px;right:210px;}
+    #listPanel{left:96px;right:210px;}
   }
 
   @media(max-width:600px){
@@ -300,7 +300,7 @@ function buildPortraitCol(){
     const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
     card.onclick=()=>openFocus(i);
     // Always use canvas so we can render sheets, individual images, or placeholders uniformly
-    const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=56; cv.height=70;
+    const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=72; cv.height=90;
     renderPortraitCanvas(cv,d,i,0);
     card.appendChild(cv);
     const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; card.appendChild(nm);
@@ -531,14 +531,9 @@ const mc=document.getElementById('mapCanvas');
 const mx=mc.getContext('2d');
 const TS=20,COLS=13,ROWS=20;
 let MAP=buildMap();
-// Start units spread slightly from center toward their first waypoint so they're visible
-const CENTER_X=6*TS+TS/2, CENTER_Y=10*TS+TS/2;
-let unitPos=DOMAINS.map(d=>{
-  const w1=d.path[1]||d.path[0];
-  const tx=w1[0]*TS+TS/2, ty=w1[1]*TS+TS/2;
-  const dx=tx-CENTER_X,dy=ty-CENTER_Y,len=Math.sqrt(dx*dx+dy*dy)||1;
-  return {x:CENTER_X+dx/len*TS*0.6, y:CENTER_Y+dy/len*TS*0.6};
-});
+// Units start at distinct tiles near center crossroads (one per path branch)
+const UNIT_STARTS=[[4,10],[8,10],[4,11],[6,8],[8,11]];
+let unitPos=UNIT_STARTS.map(([tx,ty])=>({x:tx*TS+TS/2,y:ty*TS+TS/2}));
 const UNIT_SPEED=0.35;
 let sparkles=[];
 let mapScale=1,mapOX=0,mapOY=0;
@@ -589,17 +584,34 @@ function sparkleAt(x,y){ for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,
 function fitMap(){ mc.width=window.innerWidth; mc.height=Math.max(340,window.innerHeight); }
 window.addEventListener('resize',fitMap);
 
+const UNIT_W=16,UNIT_H=20; // map sprite size in tile-pixels
 function drawUnit(x,y,idx,hp){
   const d=DOMAINS[idx],lvl=hpLevelOf(hp);
-  mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y+13,8,3,0,0,7); mx.fill();
-  switch(idx){
-    case 0: drawWizard(x,y,d.color,d.dark,lvl); break;
-    case 1: drawMerchant(x,y,d.color,d.dark,lvl); break;
-    case 2: drawFighter(x,y,d.color,d.dark,lvl); break;
-    case 3: drawBard(x,y,d.color,d.dark,lvl); break;
-    case 4: drawRogue(x,y,d.color,d.dark,lvl); break;
+  // Drop shadow
+  mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y+UNIT_H/2+2,8,3,0,0,7); mx.fill();
+  // Draw sprite from portrait sheet or individual portrait images
+  let drawn=false;
+  if(d.sheet && sheetImgs[idx] && sheetImgs[idx].complete && sheetImgs[idx].naturalWidth>0){
+    const img=sheetImgs[idx];
+    const gridPx=Math.min(img.naturalWidth,img.naturalHeight);
+    const half=gridPx/2;
+    const sx=(lvl===1||lvl===3)?half:0;
+    const sy=(lvl>=2)?half:0;
+    mx.drawImage(img,sx,sy,half,half,x-UNIT_W/2,y-UNIT_H,UNIT_W,UNIT_H);
+    drawn=true;
+  } else if(d.portraits && domainPortraitImgs[idx]){
+    const img=domainPortraitImgs[idx][Math.min(lvl,3)];
+    if(img && img.complete && img.naturalWidth>0){
+      mx.drawImage(img,0,0,img.naturalWidth,img.naturalHeight,x-UNIT_W/2,y-UNIT_H,UNIT_W,UNIT_H);
+      drawn=true;
+    }
   }
-  mx.fillStyle=STATUS_COLOR[lvl]; mx.beginPath(); mx.arc(x,y-18,2.5,0,7); mx.fill();
+  if(!drawn){
+    // Fallback: colored diamond with class initial
+    mx.fillStyle=d.color; mx.beginPath(); mx.moveTo(x,y-UNIT_H); mx.lineTo(x+UNIT_W/2,y-UNIT_H/2); mx.lineTo(x,y); mx.lineTo(x-UNIT_W/2,y-UNIT_H/2); mx.closePath(); mx.fill();
+    mx.fillStyle='#fff'; mx.font='bold 7px monospace'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText(d.cls[0],x,y-UNIT_H/2);
+  }
+  mx.fillStyle=STATUS_COLOR[lvl]; mx.beginPath(); mx.arc(x,y-UNIT_H-3,2.5,0,7); mx.fill();
 }
 function xEyes(x,ey){ mx.strokeStyle='#ee2222'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(x-3,ey-1); mx.lineTo(x-1,ey+1); mx.moveTo(x-1,ey-1); mx.lineTo(x-3,ey+1); mx.stroke(); mx.beginPath(); mx.moveTo(x+1,ey-1); mx.lineTo(x+3,ey+1); mx.moveTo(x+3,ey-1); mx.lineTo(x+1,ey+1); mx.stroke(); }
 function drawWizard(x,y,col,dark,lvl){
