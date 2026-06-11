@@ -74,8 +74,39 @@
   .task{display:flex;align-items:center;gap:5px;min-height:36px;background:rgba(12,10,32,0.85);border:1px solid #2a2050;border-left-width:3px;padding:4px 6px;font-size:7px;transition:opacity .4s;}
   .task.overdue{border-color:var(--hp-red)!important;box-shadow:0 0 6px rgba(238,34,34,.4);}
   .task.done{opacity:.4;}.task.done .tname{text-decoration:line-through;}
-  .domain-0{border-left-color:#d4884c;}.domain-1{border-left-color:#9090b0;}
-  .domain-2{border-left-color:#44aa55;}.domain-3{border-left-color:#2288aa;}.domain-4{border-left-color:#c8a840;}
+  .domain-0{border-left-color:#d4884c;}.domain-1{border-left-color:#c8a840;}
+  .domain-2{border-left-color:#44aa55;}.domain-3{border-left-color:#cc44aa;}.domain-4{border-left-color:#2288aa;}
+
+  /* Focus panel */
+  #focusBg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19;display:none;}
+  #focusBg.open{display:block;}
+  #focusPanel{position:fixed;left:0;right:0;bottom:0;max-height:75vh;z-index:20;padding:12px;
+    display:flex;flex-direction:column;gap:8px;
+    transform:translateY(100%);transition:transform .25s cubic-bezier(.2,0,0,1);}
+  #focusPanel.open{transform:translateY(0);}
+  #focusHead{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:1px solid #2a2050;}
+  #focusCls{font-size:5px;color:#9a8ad0;letter-spacing:2px;}
+  #focusName{font-size:12px;color:var(--gold);margin:3px 0 2px;}
+  #focusDest{font-size:5px;color:#888;letter-spacing:1px;}
+  .fclose{font-family:inherit;font-size:11px;background:none;border:1px solid #4a3a8a;color:var(--gold);width:28px;height:28px;cursor:pointer;flex:0 0 auto;}
+  #focusHPRow{display:flex;align-items:center;gap:8px;font-size:6px;color:#9a8ad0;}
+  #focusHPBar{flex:1;height:8px;background:#070710;border:1px solid #2a2050;}
+  #focusHPFill{height:100%;transition:width .4s,background-color .4s;}
+  #focusBody{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px;min-height:60px;}
+  #focusAddBtn{font-family:inherit;font-size:6px;background:rgba(255,215,0,.1);color:var(--gold);
+    border:1px solid #4a3060;padding:8px;cursor:pointer;letter-spacing:1px;text-align:center;flex:0 0 auto;}
+
+  /* Check-in */
+  #checkinWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:40;display:none;align-items:center;justify-content:center;padding:16px;}
+  #checkinWrap.open{display:flex;}
+  #checkinBox{width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column;gap:8px;padding:14px;}
+  .ck-title{font-size:9px;color:var(--gold);text-align:center;letter-spacing:2px;}
+  .ck-sub{font-size:5px;color:#9a8ad0;text-align:center;margin-bottom:4px;}
+  #checkinList{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px;}
+  .ck-sect{font-size:5px;letter-spacing:1px;padding:5px 0 3px;border-bottom:1px solid #2a2050;margin-top:4px;}
+  #checkinSubmit{font-family:inherit;font-size:8px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:10px;cursor:pointer;letter-spacing:1px;flex:0 0 auto;}
+  #checkinBtn{font-family:inherit;font-size:5px;background:rgba(255,215,0,.08);color:var(--gold);border:1px solid #4a3060;padding:5px 8px;cursor:pointer;letter-spacing:1px;text-align:center;}
+  #checkinBtn.done{color:#44cc44;border-color:#226622;background:rgba(68,204,68,.08);}
   .cb{width:20px;height:20px;flex:0 0 20px;border:2px solid #4a3a8a;background:#070710;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;font-size:9px;}
   .cb.checked{background:var(--hp-green);border-color:var(--hp-green);}
   .cb.checked::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #062;border-width:0 2px 2px 0;transform:rotate(45deg);animation:pop .25s;}
@@ -136,6 +167,7 @@
   </div>
   <div id="domainBars"></div>
   <div class="statline"><canvas class="icn" id="scrollIcn" width="9" height="9"></canvas><span class="tasks-stat">TASKS <span id="taskStat">0/0</span></span></div>
+  <button id="checkinBtn" onclick="showCheckin()">📋 DAILY REPORT</button>
   <div class="status-badge" id="statusBadge">READY</div>
 </div>
 
@@ -157,6 +189,30 @@
   <div id="listBody"></div>
 </div>
 
+<div id="focusBg" onclick="closeFocus()"></div>
+<div id="focusPanel" class="glass">
+  <div id="focusHead">
+    <div>
+      <div id="focusCls"></div>
+      <div id="focusName"></div>
+      <div id="focusDest"></div>
+    </div>
+    <button class="fclose" onclick="closeFocus()">✕</button>
+  </div>
+  <div id="focusHPRow">HP <div id="focusHPBar"><div id="focusHPFill"></div></div><span id="focusHPVal"></span></div>
+  <div id="focusBody"></div>
+  <button id="focusAddBtn" onclick="focusAddTask()">+ ADD TASK TO THIS DOMAIN</button>
+</div>
+
+<div id="checkinWrap">
+  <div id="checkinBox" class="glass">
+    <div class="ck-title">DAILY REPORT</div>
+    <div class="ck-sub" id="checkinDate"></div>
+    <div id="checkinList"></div>
+    <button id="checkinSubmit" onclick="submitCheckin()">SUBMIT REPORT</button>
+  </div>
+</div>
+
 <div id="gameover">
   <h1>GAME OVER</h1>
   <p>ALL UNITS HAVE FALLEN.</p>
@@ -167,11 +223,11 @@
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
 const DOMAINS = [
-  {name:'HOME',   color:'#d4884c', dark:'#8b3a10', spawnTx:5,  spawnTy:7,  targetTx:2,  targetTy:1 },
-  {name:'WORK',   color:'#9090c0', dark:'#4a4a7a', spawnTx:13, spawnTy:7,  targetTx:14, targetTy:1 },
-  {name:'HEALTH', color:'#44aa55', dark:'#1a5a1a', spawnTx:5,  spawnTy:9,  targetTx:2,  targetTy:11},
-  {name:'ERRAND', color:'#2288aa', dark:'#1a4a6a', spawnTx:13, spawnTy:9,  targetTx:16, targetTy:10},
-  {name:'OTHER',  color:'#c8a840', dark:'#7a6010', spawnTx:9,  spawnTy:7,  targetTx:9,  targetTy:3 },
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:5,  spawnTy:7,  targetTx:2,  targetTy:1 },
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:13, spawnTy:7,  targetTx:14, targetTy:1 },
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:5,  spawnTy:9,  targetTx:2,  targetTy:11},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:10, spawnTy:8,  targetTx:9,  targetTy:3 },
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:13, spawnTy:9,  targetTx:16, targetTy:10},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
@@ -258,8 +314,8 @@ function drawScroll(){ const c=document.getElementById('scrollIcn'),g=c.getConte
 function buildDomainBars(){
   const wrap=document.getElementById('domainBars');
   DOMAINS.forEach((d,i)=>{
-    const row=document.createElement('div'); row.className='drow';
-    const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.style.color=d.color; lbl.textContent=d.name;
+    const row=document.createElement('div'); row.className='drow'; row.style.cursor='pointer'; row.title='Tap to view '+d.name; row.onclick=()=>openFocus(i);
+    const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.style.color=d.color; lbl.textContent=d.cls;
     const bw=document.createElement('div'); bw.className='dbarwrap';
     const b=document.createElement('div'); b.className='dbar'; b.id='dbar'+i; b.style.width='100%'; b.style.backgroundColor=d.color;
     bw.appendChild(b); row.appendChild(lbl); row.appendChild(bw); wrap.appendChild(row);
@@ -380,31 +436,104 @@ function sparkleAt(x,y){ for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,
 function fitMap(){ mc.width=window.innerWidth; mc.height=Math.max(340,window.innerHeight); }
 window.addEventListener('resize',fitMap);
 
-// Placeholder unit sprite - distinct colored humanoid per domain
 function drawUnit(x,y,idx,hp){
-  const d=DOMAINS[idx];
-  const lvl=hpLevelOf(hp);
-  const col=STATUS_COLOR[lvl];
-  // shadow
+  const d=DOMAINS[idx],lvl=hpLevelOf(hp);
   mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y+13,8,3,0,0,7); mx.fill();
-  // legs
-  mx.fillStyle=d.dark; mx.fillRect(x-4,y+8,4,7); mx.fillRect(x+1,y+8,4,7);
-  // torso
-  mx.fillStyle=d.color; mx.fillRect(x-5,y-2,11,11);
-  // shoulder marks
-  mx.fillStyle='rgba(255,255,255,0.3)'; mx.fillRect(x-5,y-2,11,2);
+  switch(idx){
+    case 0: drawWizard(x,y,d.color,d.dark,lvl); break;
+    case 1: drawMerchant(x,y,d.color,d.dark,lvl); break;
+    case 2: drawFighter(x,y,d.color,d.dark,lvl); break;
+    case 3: drawBard(x,y,d.color,d.dark,lvl); break;
+    case 4: drawRogue(x,y,d.color,d.dark,lvl); break;
+  }
+  mx.fillStyle=STATUS_COLOR[lvl]; mx.beginPath(); mx.arc(x,y-18,2.5,0,7); mx.fill();
+}
+function xEyes(x,ey){ mx.strokeStyle='#ee2222'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(x-3,ey-1); mx.lineTo(x-1,ey+1); mx.moveTo(x-1,ey-1); mx.lineTo(x-3,ey+1); mx.stroke(); mx.beginPath(); mx.moveTo(x+1,ey-1); mx.lineTo(x+3,ey+1); mx.moveTo(x+3,ey-1); mx.lineTo(x+1,ey+1); mx.stroke(); }
+function drawWizard(x,y,col,dark,lvl){
+  // robe
+  mx.fillStyle=col; mx.beginPath(); mx.moveTo(x-4,y-2); mx.lineTo(x+5,y-2); mx.lineTo(x+8,y+15); mx.lineTo(x-7,y+15); mx.closePath(); mx.fill();
+  mx.fillStyle='rgba(0,0,0,.2)'; mx.beginPath(); mx.moveTo(x+2,y-2); mx.lineTo(x+5,y-2); mx.lineTo(x+8,y+15); mx.lineTo(x+2,y+15); mx.closePath(); mx.fill();
+  // staff
+  mx.strokeStyle=dark; mx.lineWidth=1.5; mx.beginPath(); mx.moveTo(x-11,y-14); mx.lineTo(x-11,y+12); mx.stroke();
+  mx.fillStyle='#88ddff'; mx.beginPath(); mx.arc(x-11,y-16,3,0,7); mx.fill();
   // arms
-  mx.fillStyle=d.color; mx.fillRect(x-8,y-1,3,6); mx.fillRect(x+6,y-1,3,6);
+  mx.fillStyle=col; mx.fillRect(x-8,y-1,3,5); mx.fillRect(x+6,y-1,3,5);
   // head
-  mx.fillStyle=lvl>=2?'#c89868':'#f2c98a'; mx.beginPath(); mx.arc(x,y-6,5,0,7); mx.fill();
-  // domain number badge
-  mx.fillStyle=d.color; mx.beginPath(); mx.arc(x+6,y-10,4,0,7); mx.fill();
-  mx.fillStyle='#000'; mx.font='bold 5px monospace'; mx.textAlign='center'; mx.textBaseline='middle';
-  mx.fillText(idx+1,x+6,y-10);
-  // HP indicator
-  mx.fillStyle=col; mx.beginPath(); mx.arc(x,y-14,2.5,0,7); mx.fill();
-  // Critical: X eyes
-  if(lvl===3){ mx.strokeStyle='#ee2222'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(x-3,y-9); mx.lineTo(x-1,y-7); mx.moveTo(x-1,y-9); mx.lineTo(x-3,y-7); mx.stroke(); mx.beginPath(); mx.moveTo(x+1,y-9); mx.lineTo(x+3,y-7); mx.moveTo(x+3,y-9); mx.lineTo(x+1,y-7); mx.stroke(); }
+  mx.fillStyle=lvl>=2?'#c89868':'#f2c98a'; mx.beginPath(); mx.arc(x,y-6,4.5,0,7); mx.fill();
+  // hat brim + cone
+  mx.fillStyle=col; mx.beginPath(); mx.moveTo(x-7,y-9); mx.lineTo(x+7,y-9); mx.lineTo(x+6,y-11); mx.lineTo(x-6,y-11); mx.closePath(); mx.fill();
+  mx.fillStyle=dark; mx.beginPath(); mx.moveTo(x-5,y-10); mx.lineTo(x,y-22); mx.lineTo(x+5,y-10); mx.closePath(); mx.fill();
+  // stars on hat
+  mx.fillStyle='rgba(255,220,80,.6)'; mx.font='4px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('✦',x+1,y-15);
+  if(lvl===3) xEyes(x,y-6);
+}
+function drawMerchant(x,y,col,dark,lvl){
+  mx.fillStyle=dark; mx.fillRect(x-4,y+8,4,7); mx.fillRect(x+1,y+8,4,7);
+  mx.fillStyle=col; mx.fillRect(x-5,y-2,11,11);
+  // lapels
+  mx.fillStyle=dark; mx.beginPath(); mx.moveTo(x-5,y-2); mx.lineTo(x-1,y+4); mx.lineTo(x-5,y+4); mx.closePath(); mx.fill();
+  mx.beginPath(); mx.moveTo(x+6,y-2); mx.lineTo(x+2,y+4); mx.lineTo(x+6,y+4); mx.closePath(); mx.fill();
+  // buttons
+  mx.fillStyle='rgba(255,255,255,.5)'; for(let i=0;i<3;i++){mx.beginPath();mx.arc(x+.5,y+i*3,1,0,7);mx.fill();}
+  // arms + coin bag
+  mx.fillStyle=col; mx.fillRect(x-8,y-1,3,7); mx.fillRect(x+6,y-1,3,7);
+  mx.fillStyle='#ffe050'; mx.beginPath(); mx.arc(x+9,y+5,3.5,0,7); mx.fill();
+  mx.fillStyle=dark; mx.font='bold 4px sans-serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('$',x+9,y+5.5);
+  // head + wide hat
+  mx.fillStyle=lvl>=2?'#c89868':'#f2c98a'; mx.beginPath(); mx.arc(x,y-6,4.5,0,7); mx.fill();
+  mx.fillStyle=dark; mx.fillRect(x-8,y-12,16,2); mx.fillRect(x-4,y-19,8,8);
+  mx.fillStyle='rgba(255,255,255,.15)'; mx.fillRect(x-8,y-12,16,1);
+  if(lvl===3) xEyes(x,y-6);
+}
+function drawFighter(x,y,col,dark,lvl){
+  mx.fillStyle=dark; mx.fillRect(x-4,y+8,4,7); mx.fillRect(x+1,y+8,4,7);
+  mx.fillStyle='rgba(255,255,255,.2)'; mx.fillRect(x-4,y+8,1,5); mx.fillRect(x+1,y+8,1,5);
+  mx.fillStyle=col; mx.fillRect(x-5,y-2,11,11);
+  mx.fillStyle='rgba(255,255,255,.3)'; mx.fillRect(x-1,y+1,3,8); mx.fillRect(x-5,y+3,11,2);
+  mx.fillStyle=dark; mx.fillRect(x-8,y-4,4,6); mx.fillRect(x+5,y-4,4,6);
+  mx.fillStyle='rgba(255,255,255,.15)'; mx.fillRect(x-8,y-4,4,1); mx.fillRect(x+5,y-4,4,1);
+  // sword
+  mx.fillStyle='#d0d8e0'; mx.fillRect(x+9,y-8,2,18);
+  mx.fillStyle=dark; mx.fillRect(x+7,y-4,6,2);
+  mx.fillStyle='#8a6020'; mx.fillRect(x+9,y-10,2,4);
+  // helmet
+  mx.fillStyle=dark; mx.fillRect(x-4,y-14,8,12);
+  mx.fillStyle=col; mx.fillRect(x-3,y-13,6,10);
+  mx.fillStyle='rgba(0,0,0,.6)'; mx.fillRect(x-3,y-9,6,2);
+  if(lvl===3) xEyes(x,y-8);
+}
+function drawBard(x,y,col,dark,lvl){
+  mx.fillStyle=col; mx.fillRect(x-4,y+8,4,7); mx.fillRect(x+1,y+8,4,7);
+  mx.fillStyle=col; mx.fillRect(x-5,y-2,11,11);
+  // diamond pattern
+  mx.fillStyle=dark; mx.beginPath(); mx.moveTo(x,y-2); mx.lineTo(x+4,y+3); mx.lineTo(x,y+8); mx.lineTo(x-4,y+3); mx.closePath(); mx.fill();
+  mx.fillStyle='rgba(255,255,255,.35)'; mx.beginPath(); mx.moveTo(x,y-2); mx.lineTo(x+2,y+3); mx.lineTo(x,y+8); mx.lineTo(x-2,y+3); mx.closePath(); mx.fill();
+  mx.fillStyle=col; mx.fillRect(x-8,y-1,3,5); mx.fillRect(x+6,y-1,3,5);
+  // lute
+  mx.fillStyle='#8a6020'; mx.beginPath(); mx.ellipse(x-13,y+4,4,5,0.3,0,7); mx.fill();
+  mx.fillStyle='rgba(0,0,0,.3)'; mx.beginPath(); mx.arc(x-13,y+5,2,0,7); mx.fill();
+  mx.strokeStyle='#5a3a10'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(x-10,y+1); mx.lineTo(x-8,y-6); mx.stroke();
+  mx.fillStyle=lvl>=2?'#c89868':'#f2c98a'; mx.beginPath(); mx.arc(x,y-6,4.5,0,7); mx.fill();
+  // feathered cap
+  mx.fillStyle=dark; mx.beginPath(); mx.ellipse(x,y-11,5,3,0,0,7); mx.fill();
+  mx.strokeStyle=col; mx.lineWidth=1.5; mx.beginPath(); mx.moveTo(x+4,y-13); mx.quadraticCurveTo(x+11,y-22,x+8,y-26); mx.stroke();
+  if(lvl===3) xEyes(x,y-6);
+}
+function drawRogue(x,y,col,dark,lvl){
+  mx.fillStyle=dark; mx.fillRect(x-4,y+8,4,7); mx.fillRect(x+1,y+8,4,7);
+  // cape
+  mx.fillStyle=dark; mx.beginPath(); mx.moveTo(x-7,y-4); mx.lineTo(x+8,y-4); mx.lineTo(x+11,y+16); mx.lineTo(x-10,y+16); mx.closePath(); mx.fill();
+  mx.fillStyle=col; mx.fillRect(x-4,y-2,9,11);
+  // belt & daggers
+  mx.fillStyle='#6a4020'; mx.fillRect(x-5,y+5,11,2);
+  mx.fillStyle='#d0d8e0'; mx.fillRect(x-7,y+3,1.5,7); mx.fillRect(x+6,y+3,1.5,7);
+  mx.fillStyle=col; mx.fillRect(x-8,y+0,2,5); mx.fillRect(x+7,y+0,2,5);
+  // hooded head
+  mx.fillStyle=lvl>=2?'#c89868':'#f2c98a'; mx.beginPath(); mx.arc(x,y-5,4,0,7); mx.fill();
+  mx.fillStyle=dark; mx.beginPath(); mx.arc(x,y-8,5.5,Math.PI,0); mx.lineTo(x+7,y-4); mx.lineTo(x-7,y-4); mx.closePath(); mx.fill();
+  // eye glow
+  if(lvl<3){ mx.fillStyle='rgba(255,255,180,.7)'; mx.fillRect(x-3,y-6,2,1); mx.fillRect(x+1,y-6,2,1); }
+  if(lvl===3) xEyes(x,y-5);
 }
 
 function drawObjective(d,captured,idx){
@@ -621,8 +750,89 @@ document.getElementById('collapseBtn').onclick=()=>{
   document.getElementById('collapseBtn').textContent=c?'^':'v';
 };
 
+// ============ DOMAIN FOCUS ============
+let focusIdx=null;
+function openFocus(idx){ focusIdx=idx; renderFocusPanel(); document.getElementById('focusPanel').classList.add('open'); document.getElementById('focusBg').classList.add('open'); }
+function closeFocus(){ focusIdx=null; document.getElementById('focusPanel').classList.remove('open'); document.getElementById('focusBg').classList.remove('open'); }
+function focusAddTask(){ if(focusIdx===null) return; document.getElementById('taskDomain').value=focusIdx; closeFocus(); document.getElementById('taskName').focus(); }
+function renderFocusPanel(){
+  if(focusIdx===null) return;
+  const d=DOMAINS[focusIdx],hp=domainHP(focusIdx);
+  document.getElementById('focusCls').textContent=d.cls+' CLASS';
+  document.getElementById('focusName').textContent=d.name; document.getElementById('focusName').style.color=d.color;
+  document.getElementById('focusDest').textContent='► '+d.dest;
+  document.getElementById('focusHPVal').textContent=hp+'%';
+  const fill=document.getElementById('focusHPFill'); fill.style.width=hp+'%'; fill.style.backgroundColor=hpColor(hp);
+  const body=document.getElementById('focusBody'); body.innerHTML='';
+  const tasks=state.tasks.filter(t=>(t.domain||0)===focusIdx);
+  if(!tasks.length){ body.innerHTML='<div class="empty">NO TASKS YET</div>'; return; }
+  tasks.forEach(task=>{
+    const over=isOverdue(task),doneToday=task.type===T_HABIT&&isDoneToday(task);
+    const div=document.createElement('div');
+    div.className='task domain-'+focusIdx+(over?' overdue':'')+(task.done?' done':'');
+    const cb=document.createElement('div');
+    if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; }
+    else { cb.className='cb'+(task.done||doneToday?' checked':''); }
+    cb.onclick=()=>{ toggleTask(task.id); renderFocusPanel(); };
+    const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
+    const meta=document.createElement('div'); meta.className='tmeta';
+    if(task.type===T_HABIT){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=doneToday?'✓ TODAY':(task.streak>1?'↻ '+task.streak+'🔥':'↻ HABIT'); meta.appendChild(tl); }
+    else if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
+    const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>{ deleteTask(task.id); renderFocusPanel(); };
+    div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); div.appendChild(del);
+    body.appendChild(div);
+  });
+}
+
+// ============ CHECK-IN ============
+function checkinDone(){ return localStorage.getItem('ta_checkin')===todayStr(); }
+function updateCheckinBtn(){ const btn=document.getElementById('checkinBtn'); if(!btn) return; btn.textContent=checkinDone()?'✓ REPORTED TODAY':'📋 DAILY REPORT'; btn.classList.toggle('done',checkinDone()); }
+function showCheckin(){
+  const wrap=document.getElementById('checkinWrap');
+  document.getElementById('checkinDate').textContent=new Date().toDateString().toUpperCase();
+  renderCheckin();
+  wrap.classList.add('open');
+}
+function renderCheckin(){
+  const list=document.getElementById('checkinList'); list.innerHTML='';
+  DOMAINS.forEach((d,di)=>{
+    const tasks=state.tasks.filter(t=>(t.domain||0)===di&&(t.type===T_HABIT||t.type===T_TARGET));
+    if(!tasks.length) return;
+    const sect=document.createElement('div'); sect.className='ck-sect'; sect.style.color=d.color; sect.textContent=d.cls+' — '+d.name; list.appendChild(sect);
+    tasks.forEach(task=>{
+      const doneToday=task.type===T_HABIT&&isDoneToday(task);
+      const div=document.createElement('div'); div.className='task domain-'+di+(task.done||doneToday?' done':'');
+      const cb=document.createElement('div');
+      if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; }
+      else { cb.className='cb'+(doneToday?' checked':''); }
+      cb.onclick=()=>{ toggleTask(task.id); renderCheckin(); };
+      const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
+      const meta=document.createElement('div'); meta.className='tmeta';
+      if(task.type===T_HABIT){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=doneToday?'✓ TODAY':'↻ HABIT'; meta.appendChild(tl); }
+      else if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
+      div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); list.appendChild(div);
+    });
+  });
+  if(!list.children.length) list.innerHTML='<div class="empty">ADD HABITS & TARGETS TO USE THIS FEATURE</div>';
+}
+function submitCheckin(){
+  localStorage.setItem('ta_checkin',todayStr());
+  document.getElementById('checkinWrap').classList.remove('open');
+  updateCheckinBtn();
+}
+
+// Canvas tap → open focus for nearest unit
+mc.addEventListener('click',e=>{
+  const rect=mc.getBoundingClientRect();
+  const lx=(e.clientX-rect.left)*COLS*TS/mc.width;
+  const ly=(e.clientY-rect.top)*ROWS*TS/mc.height;
+  for(let i=0;i<DOMAINS.length;i++){
+    if(Math.abs(lx-unitPos[i].x)<16&&Math.abs(ly-unitPos[i].y)<20){ openFocus(i); return; }
+  }
+});
+
 buildDomainBars(); populateSelects(); drawHeart(); drawScroll();
-fitMap(); load(); recalcHP(); save(); refresh();
+fitMap(); load(); recalcHP(); save(); refresh(); updateCheckinBtn();
 document.getElementById('heroNameDisplay').textContent=state.name;
 document.getElementById('portraitName').textContent=state.name;
 updateFormFields();
