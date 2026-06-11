@@ -101,6 +101,7 @@
   .dgAdd{font-family:inherit;font-size:9px;background:rgba(255,215,0,.06);color:#9a8ad0;border:1px dashed #3a3060;padding:10px;min-height:44px;cursor:pointer;letter-spacing:1px;text-align:center;}
   .dgAdd:hover{color:var(--gold);border-color:var(--gold);}
   .todayStrip{border-color:var(--gold);background:rgba(255,215,0,.05);}
+  .tokenOffer{border-color:#8a6a20;background:rgba(255,204,0,.05);}
   .task{display:flex;align-items:center;gap:5px;min-height:44px;background:rgba(12,10,32,0.85);border:1px solid #2a2050;border-left-width:3px;padding:4px 6px;font-size:9px;transition:opacity .4s;}
   .task.overdue{border-color:var(--bad)!important;box-shadow:0 0 6px rgba(238,34,34,.4);}
   .task.done{opacity:.4;}.task.done .tname{text-decoration:line-through;}
@@ -870,6 +871,11 @@ function checkMilestones(){
     while(domainProgress(i)>=1&&guard++<10){
       state.milestones[i]=(state.milestones[i]||0)+1;
       logEvent('capture',null,i);
+      // Milestones forge campfire tokens (streak repair currency, cap 2)
+      if((META.tokens||0)<2){
+        META.tokens=(META.tokens||0)+1;
+        setTimeout(()=>showToast('🔥 CAMPFIRE TOKEN EARNED ('+META.tokens+'/2)','#ffcc00'),1400);
+      }
       save();
       // Ceremony: banner, screen flash, burst of sparkles at the building
       showToast('🏆 '+d.dest+' CAPTURED BY '+d.cls+'!',d.color);
@@ -931,22 +937,60 @@ function statusChip(idx){
 
 // Roll derived weekly state forward (called where recalcHP used to be)
 function recalcDerived(){ checkWeeklyReset(); }
+// Append a week outcome to a task's rolling log (cap 26, drop oldest)
+function pushWeekLog(t,w,hit){
+  if(!t.weekLog) t.weekLog=[];
+  if(t.weekLog.some(e=>e.w===w)) return;
+  t.weekLog.push({w,hit:hit?1:0});
+  if(t.weekLog.length>26) t.weekLog.splice(0,t.weekLog.length-26);
+}
+// "N OF LAST 8" — hits within the last 8 logged weeks (or fewer if young)
+function weekWindow(t){
+  const last=(t.weekLog||[]).slice(-8);
+  return {hits:last.filter(e=>e.hit).length,of:last.length};
+}
 function checkWeeklyReset(){
   const mon=mondayStr();
   state.tasks.forEach(t=>{
     if(t.type===T_HABIT&&(!t.weekStart||t.weekStart<mon)){
       // Bank hits earned in the expiring week (goal multiples for uncapped)
       const hits=Math.floor((t.weekCount||0)/(t.goal||1));
+      const wk=t.weekStart||mon;
       if(hits>0){
         t.weeklyHits=(t.weeklyHits||0)+hits;
         t.wkStreak=(t.wkStreak||0)+1;
         logEvent('week',t); // weekly hit awarded here, not at goal-met toast
+        pushWeekLog(t,wk,1);
       } else {
+        // A campfire token can keep the fire lit on an established streak —
+        // queue a one-time offer; the prompt surfaces on the QUESTS list
+        if((t.wkStreak||0)>=2&&(META.tokens||0)>0&&
+           !(META.offers||[]).some(o=>o.id===t.id&&o.w===wk)){
+          META.offers.push({id:t.id,w:wk,s:t.wkStreak});
+          saveMeta();
+        }
         t.wkStreak=0;
+        pushWeekLog(t,wk,0);
       }
       t.weekCount=0; t.lastDone=null; t.weekStart=mon;
     }
   });
+}
+// ============ CAMPFIRE TOKENS (streak repair) ============
+function spendToken(accept){
+  const offer=(META.offers||[])[0]; if(!offer) return;
+  META.offers.shift(); // either way, the prompt never reappears for that week
+  if(accept&&(META.tokens||0)>0){
+    META.tokens--;
+    const t=state.tasks.find(x=>x.id===offer.id);
+    if(t&&t.weekLog){
+      const e=t.weekLog.find(x=>x.w===offer.w);
+      if(e) e.hit=1;
+      t.wkStreak=offer.s; // the fire stays lit
+    }
+    showToast('🔥 THE FIRE BURNS ON','#ffcc00');
+  }
+  save();refresh();
 }
 function advanceDue(due,days){ const d=due?new Date(due+'T00:00:00'):new Date(); d.setDate(d.getDate()+days); return localDateStr(d); }
 
@@ -1077,6 +1121,25 @@ function maybeCelebrateStrip(){
     DOMAINS.forEach((_,i)=>setTimeout(()=>sparkleAt(unitPos[i].x,unitPos[i].y),i*120));
   }
 }
+// Non-modal streak-repair prompt (one offer at a time, dismiss = gone)
+function buildTokenOffer(){
+  const offer=(META.offers||[])[0];
+  if(!offer||(META.tokens||0)<1) { if(offer) META.offers.length=0; return null; }
+  const t=state.tasks.find(x=>x.id===offer.id);
+  if(!t){ META.offers.shift(); saveMeta(); return null; }
+  const box=document.createElement('div'); box.className='dgroup tokenOffer';
+  const msg=document.createElement('div'); msg.className='dgSub'; msg.style.color='#ffcc00';
+  msg.textContent='🔥 SPEND A CAMPFIRE TOKEN TO KEEP THE FIRE LIT? — '+t.name.toUpperCase().slice(0,28);
+  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='6px';
+  const yes=document.createElement('button'); yes.className='miniBtn'; yes.textContent='🔥 SPEND ('+META.tokens+' HELD)';
+  yes.onclick=()=>spendToken(true);
+  const no=document.createElement('button'); no.className='miniBtn'; no.textContent='NOT THIS TIME';
+  no.onclick=()=>spendToken(false);
+  row.appendChild(yes); row.appendChild(no);
+  box.appendChild(msg); box.appendChild(row);
+  return box;
+}
+
 function buildTodayStrip(){
   const grp=document.createElement('div'); grp.className='dgroup todayStrip';
   const head=document.createElement('div'); head.className='dgHead';
@@ -1110,6 +1173,7 @@ function attachLongPress(el,id){
 // with an IDLE chip and an add prompt. Overdue domains sort first.
 function renderList(){
   const el=document.getElementById('listBody'); el.innerHTML='';
+  const offerEl=buildTokenOffer(); if(offerEl) el.appendChild(offerEl);
   el.appendChild(buildTodayStrip());
   const order=DOMAINS.map((_,i)=>i).sort((a,b)=>{
     const ao=domainStatus(a)==='BESIEGED',bo=domainStatus(b)==='BESIEGED';
@@ -1192,7 +1256,9 @@ function buildHabitRow(task,dom){
   const meta=document.createElement('div'); meta.className='tmeta';
   const dl=document.createElement('div'); dl.className='tloc'; dl.style.color=col;
   dl.textContent=capped?'↻ HABIT':'↻ HABIT ∞'; meta.appendChild(dl);
-  if(task.wkStreak>1){ const s=document.createElement('div'); s.className='ttype'; s.textContent=task.wkStreak+'🔥 WKS'; meta.appendChild(s); }
+  // Rolling window, not a breakable chain: hits in the last 8 logged weeks
+  const ww=weekWindow(task);
+  if(ww.of>0&&ww.hits>0){ const s=document.createElement('div'); s.className='ttype'; s.textContent=ww.hits+' OF LAST '+ww.of+' 🔥'; meta.appendChild(s); }
   top.appendChild(nm); top.appendChild(meta);
   if(!capped&&(task.weekCount||0)>0){
     const minus=document.createElement('button'); minus.className='del';
