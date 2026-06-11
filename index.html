@@ -301,6 +301,7 @@
   <div id="checkinBox" class="glass">
     <div class="ck-title">DAILY REPORT</div>
     <div class="ck-sub" id="checkinDate"></div>
+    <div class="ck-sub" id="checkinStreak" style="color:#44cc44;letter-spacing:1px;"></div>
     <div id="checkinList"></div>
     <button id="checkinSubmit" onclick="submitCheckin()">SUBMIT REPORT</button>
   </div>
@@ -913,7 +914,7 @@ function a11y(el,label){
 // Everything lives in localStorage, which browsers can evict — give the
 // player a real save file
 function exportData(){
-  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:localStorage.getItem('ta_checkin')||null};
+  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:loadCheckinDates()};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -933,7 +934,10 @@ function importData(file){
       while(v<SCHEMA_VERSION){ migrate(v); v++; }
       state.name=((p.name||'HERO')+'').toUpperCase().slice(0,12);
       state.captures=DOMAINS.map((_,i)=>(p.captures&&p.captures[i])||0);
-      if(p.checkin) localStorage.setItem('ta_checkin',p.checkin);
+      if(p.checkin){
+        const dates=Array.isArray(p.checkin)?p.checkin:[p.checkin];
+        saveCheckinDates(dates);
+      }
       recalcHP(); save(); refresh(); updatePortraits(); updateCheckinBtn();
       document.getElementById('heroNameDisplay').textContent=state.name;
       visSteps=DOMAINS.map((_,i)=>domainCurrentStep(i));
@@ -1741,11 +1745,53 @@ function renderFocusPanel(){
 }
 
 // ============ CHECK-IN ============
-function checkinDone(){ return localStorage.getItem('ta_checkin')===todayStr(); }
-function updateCheckinBtn(){ const btn=document.getElementById('checkinBtn'); if(!btn) return; btn.textContent=checkinDone()?'✓ REPORTED TODAY':'📋 DAILY REPORT'; btn.classList.toggle('done',checkinDone()); }
+function loadCheckinDates(){
+  try{
+    const raw=localStorage.getItem('ta_checkin');
+    if(!raw) return [];
+    const parsed=JSON.parse(raw);
+    if(Array.isArray(parsed)) return parsed;
+    // migrate: old format was a plain date string
+    return [parsed];
+  }catch(e){ return []; }
+}
+function saveCheckinDates(dates){ localStorage.setItem('ta_checkin',JSON.stringify(dates)); }
+function checkinDone(){ return loadCheckinDates().includes(todayStr()); }
+function checkinStreak(){
+  const dates=loadCheckinDates().slice().sort().reverse();
+  if(!dates.length) return 0;
+  let streak=0;
+  let d=new Date(); d.setHours(0,0,0,0);
+  // allow streak to count if today not yet reported (check from yesterday)
+  const todayInclusive=dates.includes(localDateStr(d));
+  if(!todayInclusive){
+    // yesterday must be in dates to have an ongoing streak
+    d.setDate(d.getDate()-1);
+  }
+  for(let i=0;i<365;i++){
+    const s=localDateStr(d);
+    if(dates.includes(s)){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+function updateCheckinBtn(){
+  const btn=document.getElementById('checkinBtn'); if(!btn) return;
+  const done=checkinDone();
+  const streak=checkinStreak();
+  if(done){
+    btn.textContent=streak>1?'✓ '+streak+'🔥 DAY STREAK':'✓ REPORTED TODAY';
+  } else {
+    btn.textContent=streak>0?'📋 REPORT ('+streak+'🔥)':'📋 DAILY REPORT';
+  }
+  btn.classList.toggle('done',done);
+}
 function showCheckin(){
   const wrap=document.getElementById('checkinWrap');
   document.getElementById('checkinDate').textContent=new Date().toDateString().toUpperCase();
+  const streak=checkinStreak();
+  const el=document.getElementById('checkinStreak');
+  if(el) el.textContent=streak>0?streak+' DAY STREAK 🔥':'';
   renderCheckin();
   wrap.classList.add('open');
 }
@@ -1774,9 +1820,14 @@ function renderCheckin(){
   if(!list.children.length) list.innerHTML='<div class="empty">ADD HABITS & TARGETS TO USE THIS FEATURE</div>';
 }
 function submitCheckin(){
-  localStorage.setItem('ta_checkin',todayStr());
+  const dates=loadCheckinDates();
+  const today=todayStr();
+  if(!dates.includes(today)) dates.push(today);
+  saveCheckinDates(dates);
   document.getElementById('checkinWrap').classList.remove('open');
   updateCheckinBtn();
+  const streak=checkinStreak();
+  if(streak>1) showToast('📋 REPORT FILED — '+streak+' DAY STREAK 🔥','#44cc44');
 }
 
 // Canvas tap → open focus for nearest unit
