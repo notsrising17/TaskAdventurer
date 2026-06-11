@@ -120,13 +120,14 @@ r = await page.evaluate(() => {
   META.critMiss = 0; META.critBonus = [0, 0, 0, 0, 0];
   let crits = 0, gap = 0, maxGap = 0;
   const t = { domain: 0, type: 1 };
-  for (let i = 0; i < 1000; i++) {
+  const N = 5000; // larger sample tightens variance so the band check is stable
+  for (let i = 0; i < N; i++) {
     const before = META.critBonus[0];
     rollCrit(t);
     if (META.critBonus[0] > before) { crits++; if (gap > maxGap) maxGap = gap; gap = 0; }
     else gap++;
   }
-  return { rate: crits / 1000, maxGap };
+  return { rate: crits / N, maxGap };
 });
 check('crits: rate within 9%-16% over 1000 completions', r.rate >= 0.09 && r.rate <= 0.16, r.rate);
 check('crits: no gap exceeds 15 (fairness guard)', r.maxGap <= 14, r.maxGap); // 14 misses then forced 15th

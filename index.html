@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Task Adventurer</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#080810">
@@ -274,7 +274,7 @@
     .cb{width:32px;height:32px;flex:0 0 32px;}
     .cb.checked::after{left:8px;top:3px;width:7px;height:13px;}
     #qcFab{bottom:64px;}
-    body[data-tab=WORLD] #qcFab,body[data-tab=PARTY] #qcFab{display:none;}
+    body[data-tab=WORLD] #qcFab{display:none;}
   }
 
   /* Respect OS-level reduced-motion preference */
@@ -1899,8 +1899,8 @@ window.addEventListener('resize',fitMap);
 const UNIT_W=36,UNIT_H=36; // map sprite size in tile-pixels (slightly larger on the decluttered map)
 function drawUnit(x,y,idx,lvl){
   const d=DOMAINS[idx];
-  // Drop shadow
-  mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y+UNIT_H/2+2,8,3,0,0,7); mx.fill();
+  // Drop shadow — sits at the sprite's feet (y), not below them
+  mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y,8,3,0,0,7); mx.fill();
   // Draw dedicated sprite image
   const sImg=domainSpriteImgs[idx];
   if(sImg && sImg.complete && sImg.naturalWidth>0){
