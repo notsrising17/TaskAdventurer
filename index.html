@@ -247,26 +247,23 @@
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
 // path: waypoints [[tx,ty],...] from center (6,10) to destination along grid paths
-// spriteRgn: fractional crop {x,y,w,h} of the sheet to use as the map unit sprite
-// merchant/bard/rogue: full-body sprite is center-bottom of the sheet
-// fighter: full-body sprite is top-right of the sheet
-// wizard: individual portrait files are full-body, use whole image
+// spriteRgn no longer needed — dedicated sprite files used instead
 const DOMAINS = [
   {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:1,  targetTy:2,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null,
-   spriteRgn:{x:0,y:0,w:1,h:1},
+   sprite:'wizard_sprite_16bit.png',
    path:[[6,10],[3,10],[3,2],[1,2]]},
   {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:10, targetTy:2,  portraits:null, sheet:'merchant_sheet.png',
-   spriteRgn:{x:0.25,y:0.5,w:0.5,h:0.5},
+   sprite:'merchant_sprite.png',
    path:[[6,10],[9,10],[9,2],[10,2]]},
   {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', targetTx:1,  targetTy:17, portraits:null, sheet:'fiighter_sheet.png',
-   spriteRgn:{x:0.5,y:0,w:0.5,h:0.5},
+   sprite:'fighter_sprite.png',
    path:[[6,10],[3,10],[3,17],[1,17]]},
   {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', targetTx:6,  targetTy:3,  portraits:null, sheet:'bard_sheet.png',
-   spriteRgn:{x:0.25,y:0.5,w:0.5,h:0.5},
+   sprite:'bard_sprite.png',
    path:[[6,10],[6,3]]},
   {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', targetTx:11, targetTy:17, portraits:null, sheet:'rogue_sheet.png',
-   spriteRgn:{x:0.25,y:0.5,w:0.5,h:0.5},
+   sprite:'rogue_sprite.png',
    path:[[6,10],[9,10],[9,17],[11,17]]},
 ];
 
@@ -274,6 +271,8 @@ const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
 
 // ============ PORTRAITS ============
 const spriteImg = new Image(); spriteImg.src = 'wizard_sprite_16bit.png';
+// Dedicated full-body map sprites per domain
+const domainSpriteImgs = DOMAINS.map(d=>{ const i=new Image(); i.src=d.sprite; return i; });
 // Preload individual portrait images
 const domainPortraitImgs = DOMAINS.map(d => d.portraits ? d.portraits.map(src=>{ const i=new Image(); i.src=src; return i; }) : null);
 // Preload portrait sheets (2×2 grid, top-left=ok, top-right=tired, bot-left=hurt, bot-right=crit)
@@ -598,26 +597,11 @@ function drawUnit(x,y,idx,hp){
   const d=DOMAINS[idx],lvl=hpLevelOf(hp);
   // Drop shadow
   mx.fillStyle='rgba(0,0,0,.4)'; mx.beginPath(); mx.ellipse(x+1,y+UNIT_H/2+2,8,3,0,0,7); mx.fill();
-  // Draw sprite from portrait sheet or individual portrait images
-  let drawn=false;
-  const r=d.spriteRgn||{x:0,y:0,w:1,h:1};
-  if(d.sheet && sheetImgs[idx] && sheetImgs[idx].complete && sheetImgs[idx].naturalWidth>0){
-    const img=sheetImgs[idx];
-    const sx=img.naturalWidth*r.x, sy=img.naturalHeight*r.y;
-    const sw=img.naturalWidth*r.w, sh=img.naturalHeight*r.h;
-    mx.drawImage(img,sx,sy,sw,sh,x-UNIT_W/2,y-UNIT_H,UNIT_W,UNIT_H);
-    drawn=true;
-  } else if(d.portraits && domainPortraitImgs[idx]){
-    const img=domainPortraitImgs[idx][Math.min(lvl,3)];
-    if(img && img.complete && img.naturalWidth>0){
-      const sx=img.naturalWidth*r.x, sy=img.naturalHeight*r.y;
-      const sw=img.naturalWidth*r.w, sh=img.naturalHeight*r.h;
-      mx.drawImage(img,sx,sy,sw,sh,x-UNIT_W/2,y-UNIT_H,UNIT_W,UNIT_H);
-      drawn=true;
-    }
-  }
-  if(!drawn){
-    // Fallback: colored diamond with class initial
+  // Draw dedicated sprite image
+  const sImg=domainSpriteImgs[idx];
+  if(sImg && sImg.complete && sImg.naturalWidth>0){
+    mx.drawImage(sImg,0,0,sImg.naturalWidth,sImg.naturalHeight,x-UNIT_W/2,y-UNIT_H,UNIT_W,UNIT_H);
+  } else {
     mx.fillStyle=d.color; mx.beginPath(); mx.moveTo(x,y-UNIT_H); mx.lineTo(x+UNIT_W/2,y-UNIT_H/2); mx.lineTo(x,y); mx.lineTo(x-UNIT_W/2,y-UNIT_H/2); mx.closePath(); mx.fill();
     mx.fillStyle='#fff'; mx.font='bold 7px monospace'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText(d.cls[0],x,y-UNIT_H/2);
   }
