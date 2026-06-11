@@ -265,15 +265,27 @@ const domainPortraitImgs = DOMAINS.map(d => d.portraits ? d.portraits.map(src=>{
 const sheetImgs = DOMAINS.map(d=>{ if(!d.sheet) return null; const i=new Image(); i.src=d.sheet; i.onload=()=>updatePortraits(); return i; });
 
 // Draw one quadrant of a portrait sheet onto a canvas element
-// lvl 0=TL 1=TR 2=BL 3=BR
+// Sheet layout: 2×2 grid (TL=ok, TR=tired, BL=hurt, BR=crit)
+// For landscape sheets (sprite on the side), use the square left portion
 function drawSheetPortrait(cv,sheetImg,lvl){
-  const g=cv.getContext('2d'),w=cv.width,h=cv.height;
-  g.clearRect(0,0,w,h);
-  if(!sheetImg.complete||!sheetImg.naturalWidth){ g.fillStyle='#111'; g.fillRect(0,0,w,h); return; }
-  const sw=sheetImg.naturalWidth/2, sh=sheetImg.naturalHeight/2;
-  const sx=(lvl===1||lvl===3)?sw:0;
-  const sy=(lvl>=2)?sh:0;
-  g.drawImage(sheetImg,sx,sy,sw,sh,0,0,w,h);
+  const g=cv.getContext('2d'),cw=cv.width,ch=cv.height;
+  g.clearRect(0,0,cw,ch);
+  if(!sheetImg.complete||!sheetImg.naturalWidth){ g.fillStyle='#111'; g.fillRect(0,0,cw,ch); return; }
+  // Use square grid area — handles both square sheets and landscape (sprite on side)
+  const gridPx=Math.min(sheetImg.naturalWidth,sheetImg.naturalHeight);
+  const half=gridPx/2;
+  const sx=(lvl===1||lvl===3)?half:0;
+  const sy=(lvl>=2)?half:0;
+  // Draw quadrant, centered-crop to fill portrait card (portrait aspect)
+  const srcAR=1; // quadrant is always square (half×half)
+  const dstAR=cw/ch;
+  let drawW,drawH,drawX,drawY;
+  if(srcAR>dstAR){ drawH=ch; drawW=ch; drawX=0; drawY=0; }
+  else           { drawW=cw; drawH=cw; drawX=0; drawY=0; }
+  // Center-crop the quadrant to fill dst
+  const scale=Math.max(cw/half,ch/half);
+  const scaledW=half*scale,scaledH=half*scale;
+  g.drawImage(sheetImg,sx,sy,half,half,(cw-scaledW)/2,(ch-scaledH)/2,scaledW,scaledH);
 }
 
 function buildPortraitCol(){
