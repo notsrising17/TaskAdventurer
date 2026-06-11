@@ -569,6 +569,72 @@ const DOMAINS = [
 // in schema v3 — the literal 2 appears only inside migrate().
 const T_QUEST = 0, T_HABIT = 1;
 
+// ============ PRESET LOADER ============
+// Lazy-fetches presets.tsv on first need; cached for session.
+// IMPORTANT: every edit to presets.tsv requires a SW cache version bump.
+let _presetsCache = null;
+let _presetsLoading = null;
+
+// Fallback set: one sample:yes preset per domain, used if fetch fails
+const PRESET_FALLBACK = [
+  {domain:'work',       goal:3, cap:true,  sample:true, name:'Inbox to zero'},
+  {domain:'health',     goal:4, cap:true,  sample:true, name:'Move your body 20 minutes'},
+  {domain:'creativity', goal:4, cap:true,  sample:true, name:'Make something for 20 minutes'},
+  {domain:'home',       goal:4, cap:false, sample:true, name:'One 10-minute tidy burst'},
+  {domain:'social',     goal:3, cap:false, sample:true, name:'Text someone you\'ve been meaning to'},
+];
+
+function parsePresetsTSV(text) {
+  const presets = [];
+  const lines = text.split('\n');
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) return;
+    const fields = line.split('\t');
+    if (fields[0] === 'domain') return; // header
+    if (fields.length !== 5) {
+      console.warn(`presets.tsv line ${i+1}: expected 5 tab-separated fields, got ${fields.length} — skipping: ${JSON.stringify(raw)}`);
+      return;
+    }
+    const [domainStr, goalStr, capStr, sampleStr, name] = fields;
+    const di = DOMAINS.findIndex(d => (d.name||'').toLowerCase() === domainStr.toLowerCase());
+    if (di === -1) {
+      console.warn(`presets.tsv line ${i+1}: unknown domain "${domainStr}" — skipping`);
+      return;
+    }
+    presets.push({
+      domain: domainStr.toLowerCase(),
+      domainIdx: di,
+      goal: Math.max(1, parseInt(goalStr, 10) || 1),
+      cap: capStr.trim().toLowerCase() === 'yes',
+      sample: sampleStr.trim().toLowerCase() === 'yes',
+      name: name.trim(),
+    });
+  });
+  return presets;
+}
+
+function loadPresets() {
+  if (_presetsCache) return Promise.resolve(_presetsCache);
+  if (_presetsLoading) return _presetsLoading;
+  _presetsLoading = fetch('./presets.tsv')
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(text => {
+      _presetsCache = parsePresetsTSV(text);
+      _presetsLoading = null;
+      return _presetsCache;
+    })
+    .catch(() => {
+      // offline / missing — map fallback to domain indices
+      _presetsCache = PRESET_FALLBACK.map(p => ({
+        ...p,
+        domainIdx: DOMAINS.findIndex(d => (d.name||'').toLowerCase() === p.domain),
+      })).filter(p => p.domainIdx !== -1);
+      _presetsLoading = null;
+      return _presetsCache;
+    });
+  return _presetsLoading;
+}
 
 // ============ PORTRAITS ============
 // Dedicated full-body map sprites per domain
