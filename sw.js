@@ -2,7 +2,7 @@
 // - App shell + art assets precached (cache-first)
 // - index.html network-first so updates land, cached copy serves offline
 // - Google Fonts (CSS + woff2) runtime-cached so the pixel font works offline
-const VERSION = 'ta-v4';
+const VERSION = 'ta-v5';
 const SHELL = VERSION + '-shell';
 const FONTS = VERSION + '-fonts';
 

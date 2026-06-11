@@ -48,7 +48,7 @@ let r = await page.evaluate(() => {
     msInit: META.msInit,
   };
 });
-check('migration: version bumped to 4', r.version === '4', r.version);
+check('migration: version bumped to 5', r.version === '5', r.version);
 check('migration: weekLog seeded from wkStreak (3 hits)', r.weekLogHits >= 3 && r.weekLogLen >= 3, JSON.stringify(r));
 check('migration: snoozeCount initialized', r.snooze === 0, r.snooze);
 check('migration: msBase records pre-existing milestones', r.msBase === '0,2,0,0,0', r.msBase);
@@ -115,40 +115,179 @@ await page.reload();
 r = await page.evaluate(() => document.getElementById('campWrap').classList.contains('open'));
 check('re-entry: modal never appears two opens in a row', r === false);
 
-// ---------- 4. crit bounds: 1000 completions ----------
+// ---------- 4. crit bounds: 5000 completions ----------
 r = await page.evaluate(() => {
-  META.critMiss = 0; META.critBonus = [0, 0, 0, 0, 0];
+  META.critMiss = 0;
+  EXPEDITION.upgrades.lucky = 0; // base rate
   let crits = 0, gap = 0, maxGap = 0;
   const t = { domain: 0, type: 1 };
   const N = 5000; // larger sample tightens variance so the band check is stable
   for (let i = 0; i < N; i++) {
-    const before = META.critBonus[0];
-    rollCrit(t);
-    if (META.critBonus[0] > before) { crits++; if (gap > maxGap) maxGap = gap; gap = 0; }
+    if (rollCrit(t)) { crits++; if (gap > maxGap) maxGap = gap; gap = 0; }
     else gap++;
   }
-  return { rate: crits / N, maxGap };
+  // Lucky Charm tiers shift the rate but never past the 16% cap
+  EXPEDITION.upgrades.lucky = 2;
+  const cappedRate = expMods().critRate;
+  EXPEDITION.upgrades.lucky = 0;
+  return { rate: crits / N, maxGap, cappedRate };
 });
-check('crits: rate within 9%-16% over 1000 completions', r.rate >= 0.09 && r.rate <= 0.16, r.rate);
+check('crits: rate within 9%-16% over 5000 completions', r.rate >= 0.09 && r.rate <= 0.16, r.rate);
 check('crits: no gap exceeds 15 (fairness guard)', r.maxGap <= 14, r.maxGap); // 14 misses then forced 15th
+check('crits: lucky charm II rate capped at 16%', r.cappedRate <= 0.16, r.cappedRate);
 
-// ---------- 5. milestone pricing ----------
+// ---------- 5. expedition league math ----------
+r = await page.evaluate(({ thisWeekDue, nextWeekDue }) => {
+  EXPEDITION = expDefaults(); EXPEDITION.week = mondayStr(); saveExp();
+  const habit = { id: 901, name: 'H', domain: 2, type: 1 };
+  const quest = { id: 902, name: 'Q', domain: 1, type: 0, due: null };
+  const dueQ = { id: 903, name: 'DQ', domain: 0, type: 0, due: thisWeekDue };
+  const lateQ = { id: 904, name: 'LQ', domain: 3, type: 0, due: nextWeekDue };
+  const tav = { id: 905, name: 'T', domain: -1, type: 0 };
+  const a = earnLeagues(habit, 'habit', false);   // 1
+  const b = earnLeagues(quest, 'done', false);    // 2
+  const c = earnLeagues(dueQ, 'done', false);     // 3 (punctuality)
+  const d = earnLeagues(lateQ, 'done', false);    // 2 (due next week — no bonus)
+  const e = earnLeagues(tav, 'done', false);      // 0 (tavern)
+  const f = earnLeagues(dueQ, 'done', true);      // 6 (crit doubles)
+  const g = earnLeagues(habit, 'habit', true);    // 2 (crit habit)
+  return { a, b, c, d, e, f, g, total: EXPEDITION.leagues, leader: EXPEDITION.lastLeader };
+}, { thisWeekDue: dstr(0), nextWeekDue: dstr(8) });
+check('leagues: habit=1 quest=2 due-this-week=3', r.a === 1 && r.b === 2 && r.c === 3, JSON.stringify(r));
+check('leagues: due outside this week earns no punctuality bonus', r.d === 2, r.d);
+check('leagues: tavern earns 0', r.e === 0, r.e);
+check('leagues: crit doubles the event value (3→6, 1→2)', r.f === 6 && r.g === 2, JSON.stringify(r));
+check('leagues: shared counter sums all domains', r.total === 1 + 2 + 3 + 2 + 0 + 6 + 2, r.total);
+check('leagues: last earner leads the party', r.leader === 2, r.leader);
+
+// undo refunds exactly what was granted, floor 0
 r = await page.evaluate(() => {
-  META.msBase = [0, 0, 0, 0, 0];
-  state.milestones = [0, 0, 0, 0, 0];
-  const c = MILESTONE_COST[0];
-  const fresh0 = nextMilestoneCost(0);
-  state.milestones[0] = 1; const fresh1 = nextMilestoneCost(0);
-  state.milestones[0] = 2; const fresh2 = nextMilestoneCost(0);
-  META.msBase = [1, 0, 0, 0, 0]; state.milestones[0] = 1;
-  const migrated = nextMilestoneCost(0);
-  state.milestones = [0, 0, 0, 0, 0]; META.msBase = [0, 0, 0, 0, 0];
-  return { c, fresh0, fresh1, fresh2, migrated };
+  const before = EXPEDITION.leagues;
+  const habit = { id: 901, name: 'H', domain: 2, type: 1 };
+  const dueQ = { id: 903, name: 'DQ', domain: 0, type: 0, due: todayStr() };
+  const r1 = refundLeagues(habit, 'habit'); // pops the crit grant (2)
+  const r2 = refundLeagues(dueQ, 'done');   // pops the crit grant (6)
+  const r3 = refundLeagues({ id: 999 }, 'done'); // nothing ledgered → 0
+  // floor 0: drain everything then refund more
+  EXPEDITION.leagues = 0; EXPEDITION.ledger = [{ id: 1, ev: 'done', amt: 5 }];
+  refundLeagues({ id: 1 }, 'done');
+  return { before, r1, r2, r3, floored: EXPEDITION.leagues };
 });
-check('milestones: first costs ceil(c/3)', r.fresh0 === Math.ceil(r.c / 3), JSON.stringify(r));
-check('milestones: second costs ceil(2c/3)', r.fresh1 === Math.ceil(2 * r.c / 3), JSON.stringify(r));
-check('milestones: third costs full', r.fresh2 === r.c, JSON.stringify(r));
-check('milestones: migrated domain pays full price', r.migrated === r.c, JSON.stringify(r));
+check('leagues: undo refunds the exact ledgered amount (LIFO)', r.r1 === 2 && r.r2 === 6, JSON.stringify(r));
+check('leagues: refund without a ledger entry is a no-op', r.r3 === 0, r.r3);
+check('leagues: refund floors at 0', r.floored === 0, r.floored);
+
+// completion path integration: toggling a real task moves the expedition
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults(); EXPEDITION.week = mondayStr(); saveExp();
+  META.critMiss = 0;
+  const t = { id: 910, name: 'INTEG', domain: 4, type: 0, done: false, due: null, repeat: 0, snoozeCount: 0 };
+  state.tasks.push(t);
+  const r0 = EXPEDITION.leagues;
+  toggleTask(910); const after = EXPEDITION.leagues;
+  toggleTask(910); const undone = EXPEDITION.leagues; // un-complete refunds
+  state.tasks = state.tasks.filter(x => x.id !== 910);
+  return { r0, gained: after - r0, undone };
+});
+check('leagues: toggleTask grants ≥2 and un-toggle refunds it', r.gained >= 2 && r.undone === r.r0, JSON.stringify(r));
+
+// ---------- 5b. rollover ceremony ----------
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.week = mondayStrOffset(-1); // last week
+  EXPEDITION.leagues = 27; EXPEDITION.reps = 14; EXPEDITION.gold = 0;
+  const fired = checkExpeditionWeek();
+  const p = EXPEDITION.pending;
+  const second = checkExpeditionWeek(); // same week — must not double-fire
+  return { fired, second, p, gold: EXPEDITION.gold, best: EXPEDITION.best, leagues: EXPEDITION.leagues, week: EXPEDITION.week === mondayStr() };
+});
+check('rollover: fires once on a new week', r.fired === true && r.second === false, JSON.stringify(r));
+check('rollover: 27 leagues = 5 landmarks = +15 gold', r.p.landmarks === 5 && r.p.gold === 15 && r.gold === 15, JSON.stringify(r.p));
+check('rollover: personal best recorded', r.best === 27, r.best);
+check('rollover: route resets (no trailhead = 0)', r.leagues === 0 && r.week === true, JSON.stringify(r));
+
+// rested week: zero reps → quiet copy, no numbers
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.week = mondayStrOffset(-1); EXPEDITION.leagues = 3; EXPEDITION.reps = 0;
+  checkExpeditionWeek();
+  maybeShowRollover();
+  const txt = document.getElementById('rollBox').innerText;
+  const open = document.getElementById('rollWrap').classList.contains('open');
+  closeRollover();
+  const cleared = EXPEDITION.pending === null;
+  return { rested: EXPEDITION.gold === 0, txt, open, cleared };
+});
+check('rollover: rested week shows THE PARTY RESTED with no numbers', r.open && /PARTY RESTED/.test(r.txt) && !/\d/.test(r.txt), r.txt);
+check('rollover: dismiss clears pending (no re-fire on reload)', r.cleared === true);
+
+// trailhead start bonus applies at the next rollover
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.week = mondayStrOffset(-1); EXPEDITION.leagues = 10; EXPEDITION.reps = 5;
+  EXPEDITION.upgrades.trailhead = 1;
+  checkExpeditionWeek();
+  EXPEDITION.pending = null;
+  return EXPEDITION.leagues;
+});
+check('rollover: trailhead I starts the new run at +3 leagues', r === 3, r);
+
+// pack mule raises landmark gold
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.week = mondayStrOffset(-1); EXPEDITION.leagues = 10; EXPEDITION.reps = 5;
+  EXPEDITION.upgrades.mule = 1;
+  checkExpeditionWeek();
+  const g = EXPEDITION.pending.gold;
+  EXPEDITION.pending = null;
+  return g; // 2 landmarks × (3+2)
+});
+check('rollover: pack mule banks 5 gold per landmark', r === 10, r);
+
+// ---------- 5c. outfitter + v5 migration ----------
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults(); EXPEDITION.week = mondayStr(); EXPEDITION.gold = 30;
+  META.tokens = 2;
+  renderShop();
+  const kitFull = document.getElementById('shopList').innerText.includes('POUCH FULL');
+  // buy trailhead I (15)
+  document.querySelectorAll('#shopList .shopBuy')[0].click();
+  const afterBuy = { gold: EXPEDITION.gold, tier: EXPEDITION.upgrades.trailhead };
+  return { kitFull, afterBuy };
+});
+check('outfitter: campfire kit blocked at token cap', r.kitFull === true);
+check('outfitter: trailhead I costs 15 and applies', r.afterBuy.gold === 15 && r.afterBuy.tier === 1, JSON.stringify(r.afterBuy));
+
+// v5 migration: legacy milestones convert at 25 gold each; this week's
+// completions seed as leagues
+await page.goto(BASE);
+await page.evaluate(({ mon }) => {
+  localStorage.clear();
+  localStorage.setItem('ta_version', '4');
+  localStorage.setItem('ta_meta', JSON.stringify({ welcomed: true, msInit: true }));
+  localStorage.setItem('ta_milestones', JSON.stringify([1, 2, 0, 0, 0]));
+  const t = { id: 1, name: 'Q', domain: 0, type: 0, done: true, due: null, snoozeCount: 0 };
+  const h = { id: 2, name: 'H', domain: 2, type: 1, dailyCap: true, goal: 3, weekCount: 2, weekStart: mon, weekLog: [], snoozeCount: 0 };
+  localStorage.setItem('ta_tasks', JSON.stringify([t, h]));
+  const now = Date.now();
+  localStorage.setItem('ta_events', JSON.stringify([
+    { t: now - 1000, ev: 'done', id: 1, d: 0, k: 0 },
+    { t: now - 900, ev: 'habit', id: 2, d: 2, k: 1 },
+    { t: now - 800, ev: 'habit', id: 2, d: 2, k: 1 },
+  ]));
+}, { mon: await page.evaluate(() => mondayStr()) });
+await page.reload();
+r = await page.evaluate(() => ({
+  gold: EXPEDITION.gold, converted: EXPEDITION.converted,
+  leagues: EXPEDITION.leagues, reps: EXPEDITION.reps, week: EXPEDITION.week === mondayStr(),
+}));
+check('v5 migration: 3 milestones convert to 75 gold', r.gold === 75 && r.converted === true, JSON.stringify(r));
+check('v5 migration: this week seeds 2+1+1=4 leagues from events', r.leagues === 4 && r.reps === 3, JSON.stringify(r));
+check('v5 migration: party ships mid-route, current week set', r.week === true, JSON.stringify(r));
+// idempotent: reload again, gold unchanged
+await page.reload();
+r = await page.evaluate(() => EXPEDITION.gold);
+check('v5 migration: conversion is one-time (reload-safe)', r === 75, r);
 
 // ---------- 6. TODAY strip cap with 20-task backlog ----------
 await page.evaluate(({ past }) => {
