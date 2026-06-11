@@ -199,12 +199,13 @@ r = await page.evaluate(() => {
   const fired = checkExpeditionWeek();
   const p = EXPEDITION.pending;
   const second = checkExpeditionWeek(); // same week — must not double-fire
-  return { fired, second, p, gold: EXPEDITION.gold, best: EXPEDITION.best, leagues: EXPEDITION.leagues, week: EXPEDITION.week === mondayStr() };
+  return { fired, second, p, gold: EXPEDITION.gold, best: EXPEDITION.best, leagues: EXPEDITION.leagues, week: EXPEDITION.week === mondayStr(), runLog: EXPEDITION.runLog };
 });
 check('rollover: fires once on a new week', r.fired === true && r.second === false, JSON.stringify(r));
-check('rollover: 27 leagues = 5 landmarks = +15 gold', r.p.landmarks === 5 && r.p.gold === 15 && r.gold === 15, JSON.stringify(r.p));
+check('rollover: 27 leagues = 5 landmarks = 27+15 = 42 gold', r.p.landmarks === 5 && r.p.gold === 42 && r.gold === 42, JSON.stringify(r.p));
 check('rollover: personal best recorded', r.best === 27, r.best);
 check('rollover: route resets (no trailhead = 0)', r.leagues === 0 && r.week === true, JSON.stringify(r));
+check('rollover: runLog appended (1 entry after first rollover)', r.runLog && r.runLog.length === 1 && r.runLog[0].leagues === 27 && r.runLog[0].landmarks === 5, JSON.stringify(r.runLog));
 
 // rested week: zero reps → quiet copy, no numbers
 r = await page.evaluate(() => {
@@ -240,9 +241,9 @@ r = await page.evaluate(() => {
   checkExpeditionWeek();
   const g = EXPEDITION.pending.gold;
   EXPEDITION.pending = null;
-  return g; // 2 landmarks × (3+2)
+  return g; // 10 leagues + 2 landmarks × (3+2) = 10+10 = 20
 });
-check('rollover: pack mule banks 5 gold per landmark', r === 10, r);
+check('rollover: gold = leagues + landmarks×landmarkGold (mule: 10+10=20)', r === 20, r);
 
 // ---------- 5c. outfitter + v5 migration ----------
 r = await page.evaluate(() => {

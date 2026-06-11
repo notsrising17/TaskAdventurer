@@ -395,13 +395,13 @@
     <button id="collapseBtn">v</button>
   </div>
   <div id="captureBar">
-    <input type="text" id="captureInput" maxlength="60" placeholder="NEW QUEST..." enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <input type="text" id="captureInput" maxlength="60" placeholder="NEW QUEST..." enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text">
     <button id="captureStow" onclick="captureBarSubmit()">STOW</button>
     <button id="dumpBtn" onclick="openDump()" style="font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:#9a8ad0;border:1px solid #3a3060;padding:10px;min-height:44px;cursor:pointer;white-space:nowrap;" title="Brain dump">⋮⋮</button>
   </div>
   <div id="formPanel">
     <div class="fgroup" id="fgName"><label class="flabel" for="taskName">TASK</label>
-      <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60" enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text"></div>
+      <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60" enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text"></div>
     <div class="fgroup" id="fgDomain"><label class="flabel" for="taskDomain">DOMAIN</label>
       <select id="taskDomain"></select></div>
     <div class="fgroup" id="fgType"><label class="flabel" for="taskType">TYPE</label>
@@ -502,7 +502,7 @@
 <div id="qcWrap" onclick="if(event.target===this)closeQuickCapture()">
   <div id="qcBox" class="glass">
     <div class="ck-sub">QUICK CAPTURE — STOWED IN THE TAVERN</div>
-    <input type="text" id="qcInput" maxlength="60" placeholder="WRITE IT DOWN..." enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <input type="text" id="qcInput" maxlength="60" placeholder="WRITE IT DOWN..." enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text">
   </div>
 </div>
 
@@ -875,11 +875,16 @@ function checkExpeditionWeek(){
   if(EXPEDITION.week===mon) return false;
   if(!EXPEDITION.week){ EXPEDITION.week=mon; saveExp(); return false; } // first ever run — no ceremony
   const lm=Math.floor(EXPEDITION.leagues/LANDMARK_EVERY);
-  const gold=lm*expMods().landmarkGold;
+  const gold=EXPEDITION.leagues+lm*expMods().landmarkGold;
   const rested=(EXPEDITION.reps||0)===0;
   EXPEDITION.pending=rested?{rested:true}:{leagues:EXPEDITION.leagues,landmarks:lm,gold};
   EXPEDITION.gold+=gold;
   EXPEDITION.best=Math.max(EXPEDITION.best||0,EXPEDITION.leagues);
+  if(!rested){
+    if(!Array.isArray(EXPEDITION.runLog)) EXPEDITION.runLog=[];
+    EXPEDITION.runLog.push({weekStart:EXPEDITION.week,leagues:EXPEDITION.leagues,landmarks:lm});
+    if(EXPEDITION.runLog.length>8) EXPEDITION.runLog.shift();
+  }
   EXPEDITION.week=mon;
   EXPEDITION.leagues=expMods().start;
   EXPEDITION.reps=0;
