@@ -2,9 +2,12 @@
 // - App shell + art assets precached (cache-first)
 // - index.html network-first so updates land, cached copy serves offline
 // - Google Fonts (CSS + woff2) runtime-cached so the pixel font works offline
+// - presets.tsv network-first (runtime cache): edits go live on next online reload,
+//   no SW version bump needed; offline falls back to runtime cache, then app inline fallback
 const VERSION = 'ta-v6';
 const SHELL = VERSION + '-shell';
 const FONTS = VERSION + '-fonts';
+const DATA  = 'ta-data-v1';
 
 const PRECACHE = [
   './',
@@ -25,8 +28,6 @@ const PRECACHE = [
   './wizard_tired.png',
   './wizard_hurt.png',
   './wizard_critical.png',
-  // NOTE: every edit to presets.tsv requires a VERSION bump or installed users keep old presets
-  './presets.tsv',
 ];
 
 self.addEventListener('install', e => {
@@ -38,7 +39,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => !k.startsWith(VERSION)).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => !k.startsWith(VERSION) && k !== DATA).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -59,6 +60,19 @@ self.addEventListener('fetch', e => {
   }
 
   if (url.origin !== location.origin) return;
+
+  // presets.tsv: network-first into a runtime cache so edits go live on next
+  // online reload without a VERSION bump; offline falls back to cached copy
+  if (url.pathname.endsWith('/presets.tsv')) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(DATA).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => caches.open(DATA).then(c => c.match(e.request)))
+    );
+    return;
+  }
 
   // HTML: network-first so deploys show up, cache fallback offline
   if (e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {

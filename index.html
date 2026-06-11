@@ -597,7 +597,8 @@ const T_QUEST = 0, T_HABIT = 1;
 
 // ============ PRESET LOADER ============
 // Lazy-fetches presets.tsv on first need; cached for session.
-// IMPORTANT: every edit to presets.tsv requires a SW cache version bump.
+// SW uses network-first for presets.tsv: edits go live on next online reload,
+// no cache version bump needed. Offline falls back to SW runtime cache, then PRESET_FALLBACK.
 let _presetsCache = null;
 let _presetsLoading = null;
 
