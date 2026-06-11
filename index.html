@@ -193,6 +193,29 @@
   .edit-btn{flex:0 0 auto;font-family:inherit;font-size:9px;background:#141228;color:#9a8ad0;border:1px solid #3a3060;padding:6px 8px;cursor:pointer;}
   .edit-btn:hover{color:var(--gold);border-color:var(--gold);}
 
+  /* Quick capture — persistent "+" and one-input overlay */
+  #qcFab{position:fixed;right:14px;bottom:16px;z-index:30;width:52px;height:52px;
+    font-family:inherit;font-size:20px;background:var(--gold);color:#1a1400;border:none;
+    border-bottom:3px solid #a88a00;cursor:pointer;box-shadow:0 0 14px rgba(255,215,0,.35);}
+  #qcWrap{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:46;display:none;align-items:flex-start;justify-content:center;padding:18vh 16px 0;}
+  #qcWrap.open{display:flex;}
+  #qcBox{width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px;padding:12px;}
+  #qcInput{font-family:inherit;font-size:10px;background:#070710;color:var(--text);border:2px solid var(--gold);padding:12px 8px;outline:none;width:100%;min-height:44px;}
+  /* Tavern — uncategorized storage, deliberately muted */
+  .tavernGroup{opacity:.85;border-style:dashed!important;}
+  .tavernGroup .task{border-left-color:#4a4060;background:rgba(10,9,24,.7);}
+  .tavSel{font-family:inherit;font-size:9px;background:#0d0b22;color:#9a8ad0;border:1px solid #3a3060;padding:8px 4px;min-height:44px;max-width:120px;}
+  .tavNudge{font-size:9px;color:#9a8ad0;border:1px dashed #3a3060;padding:4px 6px;letter-spacing:1px;}
+  /* Boss-fight split */
+  #splitWrap{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:46;display:none;align-items:center;justify-content:center;padding:16px;}
+  #splitWrap.open{display:flex;}
+  #splitBox{width:100%;max-width:400px;display:flex;flex-direction:column;gap:8px;padding:14px;}
+  .splitInput{font-family:inherit;font-size:9px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;min-height:44px;}
+  #splitSave{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:1;}
+  #splitCancel{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;}
+  .splitPrompt{display:flex;align-items:center;gap:6px;font-size:9px;color:#ffcc00;padding:6px 8px;border:1px dashed #8a6a20;background:rgba(255,204,0,.04);letter-spacing:1px;flex-wrap:wrap;}
+  .splitPrompt button{font-family:inherit;font-size:9px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid #8a6a20;padding:8px 10px;min-height:36px;cursor:pointer;}
+
   /* Bottom tab bar — mobile only (JRPG menu) */
   #tabBar{position:fixed;left:0;right:0;bottom:0;z-index:25;display:none;
     background:rgba(8,6,20,.97);border-top:3px solid var(--gold);}
@@ -245,6 +268,8 @@
     .hdot{width:18px;height:18px;}
     .cb{width:32px;height:32px;flex:0 0 32px;}
     .cb.checked::after{left:8px;top:3px;width:7px;height:13px;}
+    #qcFab{bottom:64px;}
+    body[data-tab=WORLD] #qcFab,body[data-tab=PARTY] #qcFab{display:none;}
   }
 
   /* Respect OS-level reduced-motion preference */
@@ -388,6 +413,29 @@
     <div style="display:flex;gap:6px;">
       <button id="editSave" onclick="saveEdit()">✓ SAVE</button>
       <button id="editCancel" onclick="closeEdit()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<button id="qcFab" onclick="openQuickCapture()" aria-label="Quick capture">＋</button>
+<div id="qcWrap" onclick="if(event.target===this)closeQuickCapture()">
+  <div id="qcBox" class="glass">
+    <div class="ck-sub">QUICK CAPTURE — STOWED IN THE TAVERN</div>
+    <input type="text" id="qcInput" maxlength="60" placeholder="WRITE IT DOWN...">
+  </div>
+</div>
+
+<div id="splitWrap" onclick="if(event.target===this)closeSplit()">
+  <div id="splitBox" class="glass">
+    <div class="ck-title">SPLIT THE BOSS FIGHT</div>
+    <div class="ck-sub" id="splitName"></div>
+    <input type="text" class="splitInput" maxlength="60" placeholder="FIRST ENCOUNTER...">
+    <input type="text" class="splitInput" maxlength="60" placeholder="SECOND ENCOUNTER...">
+    <input type="text" class="splitInput" maxlength="60" placeholder="THIRD (OPTIONAL)...">
+    <input type="text" class="splitInput" maxlength="60" placeholder="FOURTH (OPTIONAL)...">
+    <div style="display:flex;gap:6px;">
+      <button id="splitSave" onclick="saveSplit()">⚔ FORGE QUESTS</button>
+      <button id="splitCancel" onclick="closeSplit()">CANCEL</button>
     </div>
   </div>
 </div>
@@ -1222,6 +1270,8 @@ function renderList(){
     // Draw after insert so clientWidth is real
     drawJourneyStrip(di,strip);
   });
+  // Tavern: uncategorized captures, pinned to the bottom
+  const tav=buildTavernGroup(); if(tav) el.appendChild(tav);
 }
 
 // One habit row component for both capped and uncapped habits. Capped shows
@@ -1297,6 +1347,60 @@ function buildHabitRow(task,dom){
   return div;
 }
 
+// ============ QUICK CAPTURE + TAVERN ============
+// Tap, type, enter. Saved as a domainless quest (domain -1) in the TAVERN:
+// storage, not obligation — no status effects, no badges, no strip slots.
+function openQuickCapture(){
+  document.getElementById('qcWrap').classList.add('open');
+  const inp=document.getElementById('qcInput'); inp.value=''; inp.focus();
+}
+function closeQuickCapture(){ document.getElementById('qcWrap').classList.remove('open'); }
+function quickCapture(name){
+  state.tasks.push({id:Date.now()+Math.random(),name,domain:-1,type:T_QUEST,goal:1,
+    weekStart:mondayStr(),due:null,done:false,repeat:0,doneCount:0,snoozeCount:0});
+  save();refresh();
+  closeQuickCapture();
+  showToast('🍺 STOWED IN THE TAVERN');
+}
+document.getElementById('qcInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ const v=e.target.value.trim(); if(v) quickCapture(v); }
+  else if(e.key==='Escape') closeQuickCapture();
+});
+// Classify: a one-tap domain picker per tavern row
+function classifyTask(id,di){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  t.domain=di;
+  save();refresh();
+  showToast(DOMAINS[di].cls+' TAKES THE QUEST!',DOMAINS[di].color);
+}
+function buildTavernGroup(){
+  const items=state.tasks.filter(isTavern);
+  if(!items.length) return null;
+  const grp=document.createElement('div'); grp.className='dgroup tavernGroup';
+  const head=document.createElement('div'); head.className='dgHead';
+  const ttl=document.createElement('span'); ttl.className='dgCls'; ttl.style.color='#9a8ad0';
+  ttl.textContent='🍺 TAVERN — '+items.length+' WAITING';
+  head.appendChild(ttl);
+  if(items.length>=5){
+    const nudge=document.createElement('span'); nudge.className='tavNudge';
+    nudge.textContent='SORT THE TAVERN?';
+    head.appendChild(nudge);
+  }
+  grp.appendChild(head);
+  items.forEach(t=>{
+    const row=document.createElement('div'); row.className='task';
+    const nm=document.createElement('div'); nm.className='tname'; nm.textContent=t.name; nm.style.color='#b8a8e0';
+    const sel=document.createElement('select'); sel.className='tavSel';
+    const o0=document.createElement('option'); o0.value=''; o0.textContent='SEND TO...'; sel.appendChild(o0);
+    DOMAINS.forEach((d,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=d.cls; sel.appendChild(o); });
+    sel.onchange=()=>{ if(sel.value!=='') classifyTask(t.id,parseInt(sel.value)); };
+    const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(t.id);
+    row.appendChild(nm); row.appendChild(sel); row.appendChild(editBtn(t.id)); row.appendChild(del);
+    grp.appendChild(row);
+  });
+  return grp;
+}
+
 // ============ ACTIONS ============
 function addTask(name,domain,type,goal,due,repeat,dailyCap){
   const di=parseInt(domain)||0, ti=parseInt(type)||0;
@@ -1321,7 +1425,7 @@ function addTask(name,domain,type,goal,due,repeat,dailyCap){
 }
 function toggleTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
-  const d=DOMAINS[t.domain||0];
+  const d=DOMAINS[t.domain||0]||DOMAINS[0]; // tavern items have no domain
   if(t.type===T_HABIT){
     const wasGoalMet=habitGoalMet(t);
     const capped=t.dailyCap!==false;
@@ -1370,7 +1474,7 @@ function openEdit(id){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   editId=id;
   const kind=t.type===T_HABIT?'HABIT':'QUEST';
-  const d=DOMAINS[t.domain||0];
+  const d=DOMAINS[t.domain||0]||{name:'TAVERN',color:'#9a8ad0'};
   const ek=document.getElementById('editKind');
   ek.textContent=kind+' — '+d.name; ek.style.color=d.color;
   document.getElementById('editName').value=t.name;
