@@ -286,7 +286,6 @@ const DOMAINS = [
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
 
 // ============ PORTRAITS ============
-const spriteImg = new Image(); spriteImg.src = 'wizard_sprite.png';
 // Dedicated full-body map sprites per domain
 const domainSpriteImgs = DOMAINS.map(d=>{ const i=new Image(); i.src=d.sprite; return i; });
 // Preload individual portrait images
@@ -648,7 +647,14 @@ let MAP=buildMap();
 // Units start at distinct tiles near center crossroads (one per path branch)
 const UNIT_STARTS=[[4,10],[8,10],[4,11],[6,8],[8,11]];
 let unitPos=UNIT_STARTS.map(([tx,ty])=>({x:tx*TS+TS/2,y:ty*TS+TS/2}));
-const UNIT_SPEED=0.35;
+// Visual step progress per unit (float, animates toward domainCurrentStep)
+let visSteps=[0,0,0,0,0];
+const STEP_SPEED=0.07; // tiles per frame while hopping
+function unitTileXY(i,s){
+  const tiles=DOMAIN_TILES[i];
+  if(s<=0) return UNIT_STARTS[i];
+  return tiles[Math.min(s,tiles.length)-1];
+}
 let sparkles=[];
 let mapScale=1,mapOX=0,mapOY=0;
 
@@ -1157,32 +1163,27 @@ function drawMap(time){
   sparkles.forEach(s=>{ s.t+=0.05; const r=s.t*24,a=1-s.t; if(a>0){mx.fillStyle='rgba(255,255,180,'+a+')';mx.fillRect(s.x+Math.cos(s.a)*r-2,s.y+Math.sin(s.a)*r-2,4,4);} });
   sparkles=sparkles.filter(s=>s.t<1);
 
-  // Commander at crossroads (6,10) — drawn first so units appear on top
+  // HQ banner at the crossroads (6,10) — the party's rally point
   const pulse=0.5+0.5*Math.sin(time/250);
   const hx=6*TS+TS/2,hy=10*TS+TS/2,lvl=hpLevel();
-  const tokCol=['#3a7aff','#ffcc22','#ff8822','#ff2a2a'][lvl];
-  if(lvl>0){
-    mx.strokeStyle=tokCol+'aa'; mx.lineWidth=2;
-    mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
-  }
-  mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,hy+7,9,4,0,0,7); mx.fill();
-  mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
-  if(spriteImg.complete&&spriteImg.naturalWidth>0){ mx.drawImage(spriteImg,hx-14,hy-18,28,32); }
-  else{ mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,hy-14); mx.lineTo(hx+14,hy); mx.lineTo(hx,hy+14); mx.lineTo(hx-14,hy); mx.closePath(); mx.fill(); }
-  mx.restore();
+  mx.fillStyle='rgba(0,0,0,.3)'; mx.beginPath(); mx.ellipse(hx,hy+8,6,2.5,0,0,7); mx.fill();
+  mx.strokeStyle='#bbb'; mx.lineWidth=1.2;
+  mx.beginPath(); mx.moveTo(hx-2,hy+8); mx.lineTo(hx-2,hy-10); mx.stroke();
+  mx.fillStyle='#ffd700';
+  mx.beginPath(); mx.moveTo(hx-2,hy-10); mx.lineTo(hx+8,hy-6+Math.sin(time/400)); mx.lineTo(hx-2,hy-2); mx.closePath(); mx.fill();
   if(lvl===3){ const v=mx.createRadialGradient(COLS*TS/2,ROWS*TS/2,40,COLS*TS/2,ROWS*TS/2,COLS*TS); v.addColorStop(0,'rgba(238,34,34,0)'); v.addColorStop(1,'rgba(180,0,0,0.5)'); mx.fillStyle=v; mx.fillRect(0,0,COLS*TS,ROWS*TS); }
 
-  // Domain units — skip idx 0 (HOME/WIZARD) since commander sprite already represents it
+  // Domain units — tile-by-tile march with a hop between squares
   DOMAINS.forEach((d,i)=>{
-    if(i===0) return;
     const prog=domainProgress(i),hp=domainHP(i);
-    // Only move units when there is actual progress — never pull back toward center
-    if(prog>0){
-      const tgt=posOnPath(d.path,prog);
-      const dx=tgt.x-unitPos[i].x,dy=tgt.y-unitPos[i].y;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
-    }
+    const target=domainCurrentStep(i);
+    if(visSteps[i]>target) visSteps[i]=target; // un-check / capture reset: snap back
+    else if(visSteps[i]<target) visSteps[i]=Math.min(target,visSteps[i]+STEP_SPEED);
+    const s0=Math.floor(visSteps[i]), frac=visSteps[i]-s0;
+    const [ax2,ay2]=unitTileXY(i,s0);
+    const [bx2,by2]=frac>0?unitTileXY(i,s0+1):[ax2,ay2];
+    unitPos[i].x=(ax2+(bx2-ax2)*frac)*TS+TS/2;
+    unitPos[i].y=(ay2+(by2-ay2)*frac)*TS+TS/2-Math.sin(frac*Math.PI)*4;
     // Faint dotted trail for orientation
     if(prog>0&&prog<1){
       mx.fillStyle=d.color+'33';
@@ -1369,10 +1370,25 @@ mc.addEventListener('click',e=>{
   for(let i=0;i<DOMAINS.length;i++){
     if(Math.abs(lx-unitPos[i].x)<16&&Math.abs(ly-unitPos[i].y)<20){ openFocus(i); return; }
   }
+  // Tap a flagged path tile → show which task it is
+  const ttx=Math.floor(lx/TS), tty=Math.floor(ly/TS);
+  for(let i=0;i<DOMAINS.length;i++){
+    const pending=getDomainPendingTasks(i),tiles=DOMAIN_TILES[i],step=domainCurrentStep(i);
+    for(let k=0;k<pending.length;k++){
+      const idx=step+k; if(idx>=tiles.length) break;
+      if(tiles[idx][0]===ttx&&tiles[idx][1]===tty){
+        const t=pending[k];
+        const lbl=t.type===T_HABIT?'HABIT':t.type===T_TARGET?'TARGET':'QUEST';
+        showToast('⚑ '+lbl+': '+t.name.toUpperCase(),DOMAINS[i].color);
+        return;
+      }
+    }
+  }
 });
 
 buildPortraitCol(); buildDomainBars(); populateSelects(); drawHeart(); drawScroll();
 fitMap(); load(); recalcHP(); save(); refresh(); updateCheckinBtn();
+visSteps=DOMAINS.map((_,i)=>domainCurrentStep(i));
 document.getElementById('heroNameDisplay').textContent=state.name;
 updateFormFields();
 requestAnimationFrame(loop);
