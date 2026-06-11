@@ -479,6 +479,7 @@ function load(){
     let v=parseInt(localStorage.getItem('ta_version'))||1;
     while(v<SCHEMA_VERSION){ migrate(v); v++; }
   }catch(e){}
+  loadEvents();
 }
 function save(){
   try{
@@ -487,6 +488,41 @@ function save(){
     localStorage.setItem('ta_name',state.name);
     localStorage.setItem('ta_caps',JSON.stringify(state.captures));
   }catch(e){ showToast('⚠ SAVE FAILED — EXPORT YOUR DATA','#ee2222'); }
+}
+
+// ============ EVENT LOG ============
+// Append-only history of game actions, persisted separately from tasks
+// (own key keeps task reads/writes cheap). Events are small flat objects:
+//   {t: epoch-ms, ev: type, id: taskId, d: domainIdx, k: taskType}
+// Task names are NOT stored — resolve via id at display time so renames
+// don't fork history. "un" events exist so misclick fixes don't inflate counts.
+// Types: done/undone (quest), habit/unhabit, target/untarget,
+//        week (weekly habit goal met), capture, report
+const EVENTS_KEY='ta_events';
+const EVENTS_MAX=5000; // oldest trimmed beyond this
+state.events=[];
+function loadEvents(){
+  try{
+    const e=JSON.parse(localStorage.getItem(EVENTS_KEY)||'[]');
+    if(Array.isArray(e)) state.events=e;
+  }catch(err){ state.events=[]; }
+}
+function saveEvents(){
+  try{ localStorage.setItem(EVENTS_KEY,JSON.stringify(state.events)); }catch(e){}
+}
+function logEvent(ev,task,domainIdx){
+  const e={t:Date.now(),ev};
+  if(task){ e.id=task.id; e.d=task.domain||0; e.k=task.type||0; }
+  else if(domainIdx!=null){ e.d=domainIdx; }
+  state.events.push(e);
+  if(state.events.length>EVENTS_MAX) state.events=state.events.slice(-EVENTS_MAX);
+  saveEvents();
+}
+// Resolve an event's task name at display time; deleted tasks get a fallback
+function eventTaskName(e){
+  if(e.id==null) return null;
+  const t=state.tasks.find(x=>x.id===e.id);
+  return t?t.name:'(DELETED TASK)';
 }
 
 function isOverdue(t){
@@ -557,6 +593,7 @@ function checkCaptures(){
     let guard=0;
     while(domainProgress(i)>=1&&guard++<10){
       state.captures[i]=(state.captures[i]||0)+1;
+      logEvent('capture',null,i);
       save();
       // Ceremony: banner, screen flash, burst of sparkles at the building
       showToast('🏆 '+d.dest+' CAPTURED BY '+d.cls+'!',d.color);
@@ -798,10 +835,12 @@ function toggleTask(id){
     if(!isDoneToday(t)){
       t.weekCount=(t.weekCount||0)+1;
       t.lastDone=todayStr();
+      logEvent('habit',t);
       sparkleAt(unitPos[t.domain||0].x,unitPos[t.domain||0].y);
       // Goal hit this week — big reward
       if(!wasGoalMet&&habitGoalMet(t)){
         const di=t.domain||0;
+        logEvent('week',t);
         showToast('🔥 HABIT GOAL MET — '+d.cls+' ADVANCES!',d.color);
         for(let k=0;k<3;k++) setTimeout(()=>sparkleAt(unitPos[di].x,unitPos[di].y),k*200);
         const pc=document.getElementById('pc'+di);
@@ -811,9 +850,11 @@ function toggleTask(id){
       // Un-check today
       t.weekCount=Math.max(0,(t.weekCount||1)-1);
       t.lastDone=null;
+      logEvent('unhabit',t);
     }
   } else if(t.type===T_TARGET){
     t.count=(t.count||0)+1;
+    logEvent('target',t);
     if(t.count>=t.goal) sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
   } else {
     if(t.repeat>0){
@@ -821,13 +862,14 @@ function toggleTask(id){
       // Re-arm from the due date when it's still in the future (keeps the
       // cadence), from today when overdue (no instant double-overdue)
       t.doneCount=(t.doneCount||0)+1;
+      logEvent('done',t);
       const base=(t.due&&t.due>=todayStr())?t.due:null;
       t.due=advanceDue(base,t.repeat);
       sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
       showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due).toUpperCase().replace('DUE ','')+'!',d.color);
     }
-    else if(!t.done){ t.done=true; sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
-    else t.done=false;
+    else if(!t.done){ t.done=true; logEvent('done',t); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
+    else { t.done=false; logEvent('undone',t); }
   }
   recalcHP();save();refresh();
 }
@@ -899,11 +941,13 @@ function snoozeTask(id){
 function decRecurring(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||!(t.repeat>0)||!(t.doneCount>0)) return;
   t.doneCount--;
+  logEvent('undone',t);
   if(t.due) t.due=advanceDue(t.due,-t.repeat);
   recalcHP();save();refresh();
 }
 function decTarget(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||t.type!==T_TARGET) return;
+  if((t.count||0)>0) logEvent('untarget',t);
   t.count=Math.max(0,(t.count||0)-1);
   recalcHP();save();refresh();
 }
@@ -922,7 +966,7 @@ function a11y(el,label){
 // Everything lives in localStorage, which browsers can evict — give the
 // player a real save file
 function exportData(){
-  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:loadCheckinDates()};
+  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:loadCheckinDates(),events:state.events};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -946,6 +990,7 @@ function importData(file){
         const dates=Array.isArray(p.checkin)?p.checkin:[p.checkin];
         saveCheckinDates(dates);
       }
+      if(Array.isArray(p.events)){ state.events=p.events.slice(-EVENTS_MAX); saveEvents(); }
       recalcHP(); save(); refresh(); updatePortraits(); updateCheckinBtn();
       document.getElementById('heroNameDisplay').textContent=state.name;
       visSteps=DOMAINS.map((_,i)=>domainCurrentStep(i));
@@ -1830,7 +1875,7 @@ function renderCheckin(){
 function submitCheckin(){
   const dates=loadCheckinDates();
   const today=todayStr();
-  if(!dates.includes(today)) dates.push(today);
+  if(!dates.includes(today)){ dates.push(today); logEvent('report'); }
   saveCheckinDates(dates);
   document.getElementById('checkinWrap').classList.remove('open');
   updateCheckinBtn();
