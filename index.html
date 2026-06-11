@@ -558,6 +558,99 @@ function eventTaskName(e){
   return t?t.name:'(DELETED TASK)';
 }
 
+// ============ EVENT AGGREGATION (pure — events in, plain data out) ============
+// All day-bucketing goes through localDateStr so the UTC-flip bug can't
+// sneak back in via analytics. No DOM access in any of these.
+const POSITIVE_EV={done:1,habit:1,target:1};      // each cancels with its un-twin
+const UN_TWIN={undone:'done',unhabit:'habit',untarget:'target'};
+
+// Net completions per day for the last N days (un-events subtract, floor 0).
+// Returns [{date:'YYYY-MM-DD', n}] oldest→newest, zero-filled.
+function aggDailyCompletions(events,nDays){
+  const byDay={};
+  events.forEach(e=>{
+    const day=localDateStr(new Date(e.t));
+    if(POSITIVE_EV[e.ev]) byDay[day]=(byDay[day]||0)+1;
+    else if(UN_TWIN[e.ev]) byDay[day]=(byDay[day]||0)-1;
+  });
+  const out=[]; const d=new Date(); d.setDate(d.getDate()-(nDays-1));
+  for(let i=0;i<nDays;i++){
+    const s=localDateStr(d);
+    out.push({date:s,n:Math.max(0,byDay[s]||0)});
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+
+// Net completions per domain within [fromStr, toStr] inclusive (date strings).
+// Returns array indexed by domain.
+function aggDomainTotals(events,fromStr,toStr){
+  const totals=DOMAINS.map(()=>0);
+  events.forEach(e=>{
+    if(e.d==null||e.d<0||e.d>=totals.length) return;
+    const day=localDateStr(new Date(e.t));
+    if(day<fromStr||day>toStr) return;
+    if(POSITIVE_EV[e.ev]) totals[e.d]++;
+    else if(UN_TWIN[e.ev]) totals[e.d]--;
+  });
+  return totals.map(n=>Math.max(0,n));
+}
+
+// Current + best consecutive-day report streaks from the checkin dates array
+function reportStreaks(dates){
+  if(!dates||!dates.length) return {current:0,best:0};
+  const set=new Set(dates);
+  // best: walk each date that has no previous day (streak starts) forward
+  let best=0;
+  set.forEach(s=>{
+    const d=new Date(s+'T12:00:00');
+    const prev=new Date(d); prev.setDate(prev.getDate()-1);
+    if(set.has(localDateStr(prev))) return; // not a streak start
+    let len=0; const cur=new Date(d);
+    while(set.has(localDateStr(cur))){ len++; cur.setDate(cur.getDate()+1); }
+    if(len>best) best=len;
+  });
+  // current: count back from today (or yesterday if today not yet reported)
+  let current=0; const d=new Date();
+  if(!set.has(localDateStr(d))) d.setDate(d.getDate()-1);
+  while(set.has(localDateStr(d))){ current++; d.setDate(d.getDate()-1); }
+  return {current,best};
+}
+
+// Capture events in chronological order: [{date, d}]
+function aggCaptures(events){
+  return events.filter(e=>e.ev==='capture')
+    .map(e=>({date:localDateStr(new Date(e.t)),d:e.d}))
+    .sort((a,b)=>a.date<b.date?-1:1);
+}
+
+// Net completions per weekday. Returns [{day:0..6 (Sun..Sat), n}].
+function aggBusiestWeekday(events){
+  const counts=[0,0,0,0,0,0,0];
+  events.forEach(e=>{
+    const wd=new Date(e.t).getDay();
+    if(POSITIVE_EV[e.ev]) counts[wd]++;
+    else if(UN_TWIN[e.ev]) counts[wd]--;
+  });
+  return counts.map((n,day)=>({day,n:Math.max(0,n)}));
+}
+
+// Earliest recorded history — instrumentation start, not account start.
+// Views should show "CHRONICLE BEGINS <this>" rather than implying the
+// player did nothing before the log existed. Returns 'YYYY-MM-DD' or null.
+function chronicleStart(events,sums){
+  let earliest=null;
+  if(sums&&sums.length){
+    const m=sums.reduce((a,s)=>a===null||s.m<a?s.m:a,null);
+    if(m) earliest=m+'-01';
+  }
+  if(events&&events.length){
+    const s=localDateStr(new Date(events[0].t));
+    if(earliest===null||s<earliest) earliest=s;
+  }
+  return earliest;
+}
+
 function isOverdue(t){
   if(t.type!==T_QUEST||t.done||!t.due) return false;
   return new Date()>new Date(t.due+'T23:59:59');
