@@ -251,7 +251,7 @@
 const DOMAINS = [
   {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:1,  targetTy:2,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null,
-   sprite:'wizard_sprite_16bit.png',
+   sprite:'wizard_sprite.png',
    path:[[6,10],[3,10],[3,2],[1,2]]},
   {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:10, targetTy:2,  portraits:null, sheet:'merchant_sheet.png',
    sprite:'merchant_sprite.png',
@@ -270,7 +270,7 @@ const DOMAINS = [
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
 
 // ============ PORTRAITS ============
-const spriteImg = new Image(); spriteImg.src = 'wizard_sprite_16bit.png';
+const spriteImg = new Image(); spriteImg.src = 'wizard_sprite.png';
 // Dedicated full-body map sprites per domain
 const domainSpriteImgs = DOMAINS.map(d=>{ const i=new Image(); i.src=d.sprite; return i; });
 // Preload individual portrait images
@@ -592,7 +592,7 @@ function sparkleAt(x,y){ for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,
 function fitMap(){ mc.width=window.innerWidth; mc.height=Math.max(340,window.innerHeight); }
 window.addEventListener('resize',fitMap);
 
-const UNIT_W=18,UNIT_H=24; // map sprite size in tile-pixels
+const UNIT_W=32,UNIT_H=32; // map sprite size in tile-pixels (matches 32×32 source)
 function drawUnit(x,y,idx,hp){
   const d=DOMAINS[idx],lvl=hpLevelOf(hp);
   // Drop shadow
