@@ -60,7 +60,7 @@
   /* Domain bars */
   #domainBars{display:flex;flex-direction:column;gap:3px;}
   .drow{display:flex;align-items:center;gap:5px;}
-  .dlabel{font-size:5px;flex:0 0 44px;text-align:right;letter-spacing:.5px;}
+  .dlabel{font-size:5px;flex:0 0 34px;text-align:right;letter-spacing:.5px;}
   .dbarwrap{flex:1;height:6px;background:#070710;border:1px solid #2a2050;}
   .dbar{height:100%;transition:width .4s,background-color .4s;}
 
@@ -265,22 +265,22 @@
 // path: waypoints [[tx,ty],...] from center (6,10) to destination along grid paths
 // spriteRgn no longer needed — dedicated sprite files used instead
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:2,  targetTy:3,
+  {name:'HOME',  cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:1,  targetTy:3,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null,
    sprite:'wizard_sprite.png',
-   path:[[6,10],[3,10],[3,3],[2,3]]},
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:10, targetTy:2,  portraits:null, sheet:'merchant_sheet.png',
-   sprite:'merchant_sprite.png',
-   path:[[6,10],[9,10],[9,2],[10,2]]},
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', targetTx:1,  targetTy:17, portraits:null, sheet:'fiighter_sheet.png',
-   sprite:'fighter_sprite.png',
-   path:[[6,10],[3,10],[3,17],[1,17]]},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', targetTx:6,  targetTy:3,  portraits:null, sheet:'bard_sheet.png',
-   sprite:'bard_sprite.png',
-   path:[[6,10],[6,3]]},
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', targetTx:11, targetTy:17, portraits:null, sheet:'rogue_sheet.png',
-   sprite:'rogue_sprite.png',
-   path:[[6,10],[9,10],[9,17],[11,17]]},
+   path:[[6,10],[1,10],[1,3]]},
+  {name:'WORK',  cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:11, targetTy:4,
+   portraits:null, sheet:'merchant_sheet.png', sprite:'merchant_sprite.png',
+   path:[[6,10],[11,10],[11,4]]},
+  {name:'HEALTH',cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', targetTx:1,  targetTy:17,
+   portraits:null, sheet:'fiighter_sheet.png', sprite:'fighter_sprite.png',
+   path:[[6,10],[1,10],[1,17]]},
+  {name:'CREATIVITY',cls:'BARD', dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', targetTx:6,  targetTy:2,
+   portraits:null, sheet:'bard_sheet.png', sprite:'bard_sprite.png',
+   path:[[6,10],[6,2]]},
+  {name:'SOCIAL',cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', targetTx:11, targetTy:16,
+   portraits:null, sheet:'rogue_sheet.png', sprite:'rogue_sprite.png',
+   path:[[6,10],[11,10],[11,16]]},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
@@ -418,16 +418,19 @@ function domainHP(idx){
   return Math.max(0,Math.min(HP_MAX,hp));
 }
 
-function domainProgress(idx){
+function domainScore(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
-  if(!tasks.length) return 0;
-  let score=0;
+  let s=0;
   tasks.forEach(t=>{
-    if(t.type===T_QUEST&&t.done) score+=1;
-    else if(t.type===T_HABIT&&isDoneToday(t)) score+=1;
-    else if(t.type===T_TARGET) score+=Math.min(1,(t.count||0)/(t.goal||1));
+    if(t.type===T_QUEST) s+=t.done?10:0;
+    else if(t.type===T_HABIT) s+=(t.streak||0)*2;
+    else if(t.type===T_TARGET) s+=Math.floor((t.count||0)/(t.goal||1))*8;
   });
-  return score/tasks.length;
+  return s;
+}
+const SCORE_TO_DEST=50;
+function domainProgress(idx){
+  return Math.min(1,domainScore(idx)/SCORE_TO_DEST);
 }
 
 function hpLevel(){ return hpLevelOf(state.hp); }
@@ -453,13 +456,23 @@ function drawScroll(){ const c=document.getElementById('scrollIcn'),g=c.getConte
 
 // ============ DOMAIN BARS UI ============
 function buildDomainBars(){
-  const wrap=document.getElementById('domainBars');
+  const wrap=document.getElementById('domainBars'); wrap.innerHTML='';
   DOMAINS.forEach((d,i)=>{
-    const row=document.createElement('div'); row.className='drow'; row.style.cursor='pointer'; row.title='Tap to view '+d.name; row.onclick=()=>openFocus(i);
-    const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.style.color=d.color; lbl.textContent=d.cls;
-    const bw=document.createElement('div'); bw.className='dbarwrap';
+    const row=document.createElement('div'); row.className='drow'; row.style.cursor='pointer'; row.onclick=()=>openFocus(i);
+    const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.style.color=d.color; lbl.textContent=d.name;
+    const col=document.createElement('div'); col.style.cssText='flex:1;display:flex;flex-direction:column;gap:2px;';
+    // HP bar
+    const bw=document.createElement('div'); bw.className='dbarwrap'; bw.title='HP';
     const b=document.createElement('div'); b.className='dbar'; b.id='dbar'+i; b.style.width='100%'; b.style.backgroundColor=d.color;
-    bw.appendChild(b); row.appendChild(lbl); row.appendChild(bw); wrap.appendChild(row);
+    bw.appendChild(b);
+    // Journey progress bar
+    const pw=document.createElement('div'); pw.style.cssText='height:3px;background:#070710;border:1px solid #2a2050;';
+    const pf=document.createElement('div'); pf.id='dprog'+i; pf.style.cssText='height:100%;width:0%;background:'+d.color+';opacity:.7;transition:width .4s;';
+    const pct=document.createElement('span'); pct.id='dpct'+i; pct.style.cssText='font-size:4px;color:'+d.color+';opacity:.8;'; pct.textContent='0%';
+    pw.appendChild(pf);
+    col.appendChild(bw); col.appendChild(pw);
+    row.appendChild(lbl); row.appendChild(col); row.appendChild(pct);
+    wrap.appendChild(row);
   });
 }
 
@@ -472,7 +485,13 @@ function renderStats(){
   const done=state.tasks.filter(t=>t.done||(t.type===T_HABIT&&isDoneToday(t))).length;
   document.getElementById('taskStat').textContent=done+'/'+state.tasks.length;
   const sb=document.getElementById('statusBadge'); sb.textContent=STATUS[lvl]; sb.style.color=STATUS_COLOR[lvl]; sb.style.borderColor=STATUS_COLOR[lvl]; sb.classList.toggle('blink',lvl>=2);
-  DOMAINS.forEach((_,i)=>{ const hp=domainHP(i); const b=document.getElementById('dbar'+i); if(b){ const c2=hpColor(hp); b.style.width=hp+'%'; b.style.backgroundColor=c2; } });
+  DOMAINS.forEach((d,i)=>{
+    const hp=domainHP(i),prog=domainProgress(i);
+    const b=document.getElementById('dbar'+i); if(!b) return;
+    b.style.width=hp+'%'; b.style.backgroundColor=hpColor(hp);
+    const pb=document.getElementById('dprog'+i); if(pb) pb.style.width=(prog*100)+'%';
+    const pl=document.getElementById('dpct'+i); if(pl) pl.textContent=Math.round(prog*100)+'%';
+  });
   updatePortrait();
 }
 
@@ -591,44 +610,50 @@ let sparkles=[];
 let mapScale=1,mapOX=0,mapOY=0;
 
 function buildMap(){
-  const m=[]; for(let y=0;y<ROWS;y++){const r=[];for(let x=0;x<COLS;x++)r.push(0);m.push(r);}
-  const path=(y,x)=>{ if(y>=0&&y<ROWS&&x>=0&&x<COLS&&m[y][x]===0) m[y][x]=1; };
+  const m=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  const set=(y,x,t)=>{ if(y>=0&&y<ROWS&&x>=0&&x<COLS) m[y][x]=t; };
+  const water=(y,x)=>set(y,x,3);
+  const tree=(y,x)=>{ if(m[y]&&m[y][x]===0) set(y,x,4); };
+  const rock=(y,x)=>{ if(m[y]&&m[y][x]===0) set(y,x,2); };
 
-  // Row 10: horizontal crossroads spine
-  for(let x=0;x<COLS;x++) m[10][x]=1;
-  // Col 6: vertical spine (north-south)
-  for(let y=0;y<ROWS;y++) m[y][6]=1;
+  // Sea — top-right corner + coastal strip
+  for(let y=0;y<8;y++) for(let x=12;x<COLS;x++) water(y,x);
+  for(let y=0;y<5;y++) water(y,11);
+  for(let y=0;y<3;y++) water(y,10);
 
-  // HOME (Wizard) spawn(3,7) → dest(1,2): col 3, row 2 west
-  for(let y=3;y<=10;y++) path(y,3);
-  for(let x=2;x<=3;x++) path(3,x);
+  // River — cuts horizontally through mid-map
+  for(let x=2;x<9;x++) water(7,x);
+  water(7,9); water(8,9); water(8,10);
+  // River fords (gaps left at col 1 and col 6 for crossing)
 
-  // WORK (Merchant) spawn(9,7) → dest(11,2): col 9, row 2 east
-  for(let y=2;y<=10;y++) path(y,9);
-  for(let x=9;x<=10;x++) path(2,x);
+  // Lake — bottom right
+  for(let y=13;y<17;y++) for(let x=9;x<12;x++) water(y,x);
+  water(12,10); water(12,11); water(17,10);
 
-  // HEALTH (Fighter) spawn(3,14) → dest(1,17): col 3 south, row 17 west
-  for(let y=10;y<=17;y++) path(y,3);
-  for(let x=1;x<=3;x++) path(17,x);
+  // Rocky ridges
+  [[1,5],[2,5],[2,6],[1,6],[3,7],[4,7]].forEach(([y,x])=>rock(y,x));
+  [[13,3],[14,3],[14,4],[15,4]].forEach(([y,x])=>rock(y,x));
+  [[5,11],[5,10],[6,11]].forEach(([y,x])=>rock(y,x));
 
-  // CREATIVITY (Bard) spawn(6,7) → dest(6,3): col 6 already spine
-  // (no extra paths needed — col 6 covers full height)
+  // Forest clusters — scattered across open areas
+  [
+    [0,2],[0,3],[1,2],[1,3],       // top-left
+    [3,3],[4,3],[3,4],[4,4],       // mid-left upper
+    [0,7],[0,8],[1,8],[1,9],       // top-mid
+    [3,9],[4,9],[3,10],            // right-of-center upper
+    [9,1],[10,1],[9,2],[10,2],     // left flank mid
+    [10,5],[11,5],[11,6],[10,6],   // center-lower
+    [15,5],[16,5],[15,6],          // lower-center
+    [17,2],[18,2],[18,3],[17,3],   // bottom-left woods
+    [16,8],[17,8],[16,9],          // bottom-center-right
+    [18,12],[19,12],[19,11],       // bottom-right corner
+  ].forEach(([y,x])=>tree(y,x));
 
-  // SOCIAL (Rogue) spawn(9,14) → dest(11,17): col 9 south, row 17 east
-  for(let y=10;y<=17;y++) path(y,9);
-  for(let x=9;x<=11;x++) path(17,x);
-
-  // Water: right coastal strip (x>10, y<7)
-  for(let y=0;y<7;y++) for(let x=11;x<COLS;x++) m[y][x]=3;
-
-  // Trees — sparse, accent only (60% fewer than before)
-  [[1,1],[1,8],[4,1],[4,4],[4,8],
-   [7,1],[8,4],[9,11],
-   [12,1],[12,8],[14,4],[15,11],
-   [18,1],[18,8],[19,4]
-  ].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
-
-  DOMAINS.forEach(d=>{ if(m[d.targetTy]&&m[d.targetTy][d.targetTx]!==3) m[d.targetTy][d.targetTx]=5; });
+  // Set objective tiles (don't overwrite water or rock)
+  DOMAINS.forEach(d=>{
+    const t=m[d.targetTy]&&m[d.targetTy][d.targetTx];
+    if(t!==3&&t!==2) set(d.targetTy,d.targetTx,5);
+  });
   return m;
 }
 
@@ -741,16 +766,16 @@ function drawRogue(x,y,col,dark,lvl){
 
 function drawObjective(d,captured,idx){
   const cx=d.targetTx*TS+TS/2,cy=d.targetTy*TS+TS/2;
-  if(idx===0){
-    drawHomeHQ(cx,cy,captured,d);
-  } else {
-    drawGenericObjective(cx,cy,d,captured);
-  }
-  // destination label — larger, on a dark plate for legibility
+  if(idx===0) drawHomeHQ(cx,cy,captured,d);
+  else if(idx===1) drawFort(cx,cy,captured,d);
+  else if(idx===2) drawArena(cx,cy,captured,d);
+  else if(idx===3) drawTavern(cx,cy,captured,d);
+  else if(idx===4) drawMansion(cx,cy,captured,d);
+  // name plate
   mx.font='3.5px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
   const tw=mx.measureText(d.dest).width;
-  mx.fillStyle='rgba(5,5,16,.78)'; mx.fillRect(cx-tw/2-2,cy+13.5,tw+4,6);
-  mx.fillStyle=captured?'#ffe840':'#ffd0d0'; mx.fillText(d.dest,cx,cy+14.5);
+  mx.fillStyle='rgba(5,5,16,.82)'; mx.fillRect(cx-tw/2-2,cy+14,tw+4,6.5);
+  mx.fillStyle=captured?'#ffe840':'#ffd0d0'; mx.fillText(d.dest,cx,cy+15);
 }
 
 function drawHomeHQ(cx,cy,captured,d){
@@ -832,29 +857,126 @@ function drawHomeHQ(cx,cy,captured,d){
   if(captured){ mx.fillStyle='#ffe840'; mx.font='6px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx+4,flagY-5); }
 }
 
-function drawGenericObjective(cx,cy,d,captured){
-  if(captured){ mx.fillStyle='rgba(255,220,80,0.2)'; mx.beginPath(); mx.arc(cx,cy-4,22,0,7); mx.fill(); }
-  const col=captured?d.color:'#555', roof=captured?d.dark:'#333';
-  mx.fillStyle=col; mx.fillRect(cx-11,cy-2,22,14);
-  mx.fillStyle='rgba(0,0,0,.25)'; mx.fillRect(cx+4,cy-2,7,14);
-  mx.fillStyle=roof; mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-16); mx.lineTo(cx+13,cy-2); mx.closePath(); mx.fill();
-  mx.fillStyle='rgba(255,255,255,.15)'; mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-16); mx.lineTo(cx-4,cy-2); mx.closePath(); mx.fill();
-  mx.fillStyle=captured?'#ffe080':'#330000'; mx.fillRect(cx-3,cy+3,6,9);
-  mx.fillStyle=captured?'#ffe08088':'#22000088'; mx.fillRect(cx-9,cy,5,5); mx.fillRect(cx+4,cy,5,5);
-  mx.strokeStyle=captured?'#ccc':'#555'; mx.lineWidth=1.2; mx.beginPath(); mx.moveTo(cx,cy-16); mx.lineTo(cx,cy-27); mx.stroke();
+// WORK — walled fort/citadel (Merchant's trade hub)
+function drawFort(cx,cy,captured,d){
+  const col=captured?d.color:'#6a5a28', wall=captured?d.dark:'#3a3018';
+  if(captured){ mx.fillStyle='rgba(255,220,80,.18)'; mx.beginPath(); mx.arc(cx,cy,24,0,7); mx.fill(); }
+  // Outer wall
+  mx.fillStyle=wall; mx.fillRect(cx-14,cy-4,28,16);
+  // Wall battlements
+  for(let bx=-12;bx<=12;bx+=4){ mx.fillStyle=wall; mx.fillRect(cx+bx-1,cy-8,3,5); }
+  // Inner keep
+  mx.fillStyle=col; mx.fillRect(cx-8,cy-8,16,20);
+  mx.fillStyle='rgba(0,0,0,.2)'; mx.fillRect(cx+4,cy-8,4,20);
+  // Tower left
+  mx.fillStyle=wall; mx.fillRect(cx-16,cy-10,7,22);
+  mx.fillStyle=col; mx.fillRect(cx-15,cy-14,5,5);
+  // Tower right
+  mx.fillStyle=wall; mx.fillRect(cx+9,cy-10,7,22);
+  mx.fillStyle=col; mx.fillRect(cx+10,cy-14,5,5);
+  // Gate arch
+  mx.fillStyle=captured?'#ffe080':'#111'; mx.fillRect(cx-4,cy+3,8,9);
+  mx.fillStyle=wall; mx.beginPath(); mx.arc(cx,cy+3,4,Math.PI,0); mx.fill();
+  // Flag
+  mx.strokeStyle=captured?'#ddd':'#666'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(cx,cy-8); mx.lineTo(cx,cy-20); mx.stroke();
   mx.fillStyle=captured?d.color:'#882222';
-  mx.beginPath(); mx.moveTo(cx,cy-27); mx.lineTo(cx+9,cy-22); mx.lineTo(cx,cy-17); mx.closePath(); mx.fill();
-  if(captured){ mx.fillStyle='#ffe840'; mx.font='8px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx+4,cy-22); }
+  mx.beginPath(); mx.moveTo(cx,cy-20); mx.lineTo(cx+10,cy-15); mx.lineTo(cx,cy-10); mx.closePath(); mx.fill();
+  if(captured){ mx.fillStyle='#ffe840'; mx.font='7px serif'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('★',cx+5,cy-15); }
 }
 
-// Zone definitions for territory tinting
-const ZONES=[
-  {x:0,y:0,w:5,h:7,  color:'rgba(212,136,76,.10)'},   // HOME — warm amber
-  {x:8,y:0,w:5,h:7,  color:'rgba(200,168,64,.10)'},   // WORK — gold
-  {x:4,y:0,w:4,h:6,  color:'rgba(204,68,170,.07)'},   // CREATIVITY — pink
-  {x:0,y:13,w:5,h:7, color:'rgba(68,170,85,.10)'},    // HEALTH — green
-  {x:8,y:12,w:5,h:8, color:'rgba(34,136,170,.10)'},   // SOCIAL — teal
-];
+// HEALTH — arena/coliseum (Fighter's training ground)
+function drawArena(cx,cy,captured,d){
+  const col=captured?d.color:'#2a5a2a', edge=captured?d.dark:'#1a3a10';
+  if(captured){ mx.fillStyle='rgba(68,170,85,.2)'; mx.beginPath(); mx.arc(cx,cy,22,0,7); mx.fill(); }
+  // Outer ring
+  mx.strokeStyle=edge; mx.lineWidth=4;
+  mx.beginPath(); mx.arc(cx,cy-2,14,0,7); mx.stroke();
+  mx.fillStyle=col;
+  mx.beginPath(); mx.arc(cx,cy-2,12,0,7); mx.fill();
+  // Inner sand
+  mx.fillStyle='#8a6830';
+  mx.beginPath(); mx.arc(cx,cy-2,8,0,7); mx.fill();
+  mx.fillStyle='#a07840';
+  mx.beginPath(); mx.arc(cx-2,cy-4,5,0,7); mx.fill();
+  // Archways around ring
+  for(let a=0;a<6;a++){
+    const ang=a/6*Math.PI*2;
+    const rx=cx+Math.cos(ang)*11, ry=cy-2+Math.sin(ang)*11;
+    mx.fillStyle=edge; mx.beginPath(); mx.arc(rx,ry,2.5,0,7); mx.fill();
+  }
+  // Crossed swords icon in center
+  mx.strokeStyle=captured?'#ffe840':'#888'; mx.lineWidth=1.2;
+  mx.beginPath(); mx.moveTo(cx-4,cy-6); mx.lineTo(cx+4,cy+2); mx.stroke();
+  mx.beginPath(); mx.moveTo(cx+4,cy-6); mx.lineTo(cx-4,cy+2); mx.stroke();
+}
+
+// CREATIVITY — tavern/theater (Bard's stage)
+function drawTavern(cx,cy,captured,d){
+  const col=captured?d.color:'#6a2a6a', roof=captured?d.dark:'#3a1840';
+  if(captured){ mx.fillStyle='rgba(204,68,170,.18)'; mx.beginPath(); mx.arc(cx,cy,22,0,7); mx.fill(); }
+  // Main building
+  mx.fillStyle=col; mx.fillRect(cx-11,cy-2,22,14);
+  mx.fillStyle='rgba(0,0,0,.2)'; mx.fillRect(cx+5,cy-2,6,14);
+  // Thatched roof — jagged
+  mx.fillStyle=roof;
+  mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-18); mx.lineTo(cx+13,cy-2); mx.closePath(); mx.fill();
+  mx.fillStyle='rgba(255,200,255,.1)';
+  mx.beginPath(); mx.moveTo(cx-13,cy-2); mx.lineTo(cx,cy-18); mx.lineTo(cx-4,cy-2); mx.closePath(); mx.fill();
+  // Thatch lines
+  mx.strokeStyle=captured?'rgba(204,68,170,.5)':'rgba(80,20,80,.4)'; mx.lineWidth=1;
+  for(let i=0;i<5;i++){
+    const t=i/4; const lx=cx-13+t*26, ly=cy-2-t*16;
+    mx.beginPath(); mx.moveTo(lx-3,ly); mx.lineTo(lx+3,ly-2); mx.stroke();
+  }
+  // Sign
+  mx.fillStyle=captured?'#ffe080':'#2a1a00'; mx.fillRect(cx-6,cy,12,5);
+  mx.fillStyle=captured?d.color:'#5a3010'; mx.font='bold 3px monospace'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText('♪',cx,cy+2.5);
+  // Door + windows
+  mx.fillStyle=captured?'#ffe0a0':'#220011'; mx.fillRect(cx-3,cy+5,6,7);
+  mx.fillStyle=captured?'rgba(255,200,100,.6)':'rgba(30,0,30,.5)'; mx.fillRect(cx-10,cy,5,5); mx.fillRect(cx+5,cy,5,5);
+  // Lanterns
+  if(captured){
+    mx.fillStyle='rgba(255,220,80,.7)'; mx.beginPath(); mx.arc(cx-13,cy-2,3,0,7); mx.fill();
+    mx.beginPath(); mx.arc(cx+13,cy-2,3,0,7); mx.fill();
+  }
+}
+
+// SOCIAL — manor/estate (Rogue's hideout)
+function drawMansion(cx,cy,captured,d){
+  const col=captured?d.color:'#1a3a4a', dark=captured?d.dark:'#0a1a28';
+  if(captured){ mx.fillStyle='rgba(34,136,170,.2)'; mx.beginPath(); mx.arc(cx,cy,24,0,7); mx.fill(); }
+  // Foundation
+  mx.fillStyle='#2a2a2a'; mx.fillRect(cx-15,cy+10,30,4);
+  // Main wing
+  mx.fillStyle=col; mx.fillRect(cx-13,cy-4,26,14);
+  mx.fillStyle='rgba(0,0,0,.2)'; mx.fillRect(cx+7,cy-4,6,14);
+  // Left tower
+  mx.fillStyle=dark; mx.fillRect(cx-15,cy-8,8,22);
+  mx.fillStyle=col; mx.fillRect(cx-14,cy-12,6,5);
+  // Right tower
+  mx.fillStyle=dark; mx.fillRect(cx+7,cy-8,8,22);
+  mx.fillStyle=col; mx.fillRect(cx+8,cy-12,6,5);
+  // Pitched roof
+  mx.fillStyle=dark;
+  mx.beginPath(); mx.moveTo(cx-13,cy-4); mx.lineTo(cx,cy-16); mx.lineTo(cx+13,cy-4); mx.closePath(); mx.fill();
+  mx.fillStyle='rgba(255,255,255,.08)';
+  mx.beginPath(); mx.moveTo(cx-13,cy-4); mx.lineTo(cx,cy-16); mx.lineTo(cx-4,cy-4); mx.closePath(); mx.fill();
+  // Many windows (mansion vibe)
+  const winCol=captured?'rgba(100,220,255,.6)':'rgba(20,40,80,.5)';
+  mx.fillStyle=winCol;
+  [-8,-3,2,7].forEach(ox=>mx.fillRect(cx+ox,cy-2,3,4));
+  mx.fillRect(cx-13,cy-4,3,4); mx.fillRect(cx+10,cy-4,3,4);
+  // Grand entrance
+  mx.fillStyle=captured?'#ffe080':'#0a0a18'; mx.fillRect(cx-4,cy+3,8,11);
+  mx.strokeStyle=captured?d.color:'#333'; mx.lineWidth=1.5; mx.beginPath(); mx.arc(cx,cy+3,4,Math.PI,0); mx.stroke();
+  // Flag × 2
+  [cx-11,cx+11].forEach(fx=>{
+    mx.strokeStyle=captured?'#ccc':'#444'; mx.lineWidth=.8; mx.beginPath(); mx.moveTo(fx,cy-12); mx.lineTo(fx,cy-22); mx.stroke();
+    mx.fillStyle=captured?d.color:'#662222';
+    mx.beginPath(); mx.moveTo(fx,cy-22); mx.lineTo(fx+7,cy-18); mx.lineTo(fx,cy-13); mx.closePath(); mx.fill();
+  });
+}
+
 
 function grassColor(tx,ty,v){
   if(ty<7&&tx<4)  return ['#24511e','#285a21','#1e461a'][v];  // HOME: warm green
@@ -869,17 +991,22 @@ function posOnPath(waypts,prog){
   if(!waypts||!waypts.length) return {x:6*TS+TS/2,y:10*TS+TS/2};
   if(prog<=0) return {x:waypts[0][0]*TS+TS/2,y:waypts[0][1]*TS+TS/2};
   if(prog>=1){const w=waypts[waypts.length-1];return {x:w[0]*TS+TS/2,y:w[1]*TS+TS/2};}
-  const lens=[];let total=0;
+  // Build orthogonal sub-segments: each waypoint pair becomes H then V (or V then H)
+  // This guarantees units only ever move horizontally or vertically
+  const segs=[];
   for(let i=1;i<waypts.length;i++){
-    const l=Math.abs(waypts[i][0]-waypts[i-1][0])+Math.abs(waypts[i][1]-waypts[i-1][1]);
-    lens.push(l);total+=l;
+    const [ax,ay]=waypts[i-1],[bx,by]=waypts[i];
+    if(ax!==bx) segs.push({x1:ax,y1:ay,x2:bx,y2:ay}); // horizontal
+    if(ay!==by) segs.push({x1:bx,y1:ay,x2:bx,y2:by}); // vertical
   }
-  const dist=prog*total;let walked=0;
-  for(let i=0;i<lens.length;i++){
+  const lens=segs.map(s=>Math.abs(s.x2-s.x1)+Math.abs(s.y2-s.y1));
+  const total=lens.reduce((a,b)=>a+b,0);
+  const dist=prog*total; let walked=0;
+  for(let i=0;i<segs.length;i++){
     if(walked+lens[i]>=dist){
       const t=(dist-walked)/lens[i];
-      return {x:(waypts[i][0]+(waypts[i+1][0]-waypts[i][0])*t)*TS+TS/2,
-              y:(waypts[i][1]+(waypts[i+1][1]-waypts[i][1])*t)*TS+TS/2};
+      return {x:(segs[i].x1+(segs[i].x2-segs[i].x1)*t)*TS+TS/2,
+              y:(segs[i].y1+(segs[i].y2-segs[i].y1)*t)*TS+TS/2};
     }
     walked+=lens[i];
   }
@@ -918,12 +1045,6 @@ function drawMap(time){
       // Grass detail
       mx.fillStyle='rgba(80,180,80,.25)'; if((x+y)%2===0) mx.fillRect(px0+3,py0+3,3,3);
       mx.fillRect(px0+13,py0+11,2,2); mx.fillRect(px0+8,py0+15,2,2);
-    } else if(t===1){
-      // Dirt path — varied stones
-      mx.fillStyle='#7a5230'; mx.fillRect(px0,py0,TS,TS);
-      mx.fillStyle='#5a3a1a'; mx.fillRect(px0,py0,TS,1); mx.fillRect(px0,py0,1,TS);
-      mx.fillStyle='#9a7248'; mx.fillRect(px0+4,py0+9,3,2); mx.fillRect(px0+13,py0+4,2,2);
-      mx.fillStyle='rgba(255,255,255,.06)'; mx.fillRect(px0+1,py0+1,TS-2,3);
     } else if(t===3){
       // Water
       mx.fillStyle='#152d5e'; mx.fillRect(px0,py0,TS,TS);
@@ -938,13 +1059,16 @@ function drawMap(time){
         }
         mx.stroke();
       }
+    } else if(t===2){
+      // Rocky/mountain tile
+      mx.fillStyle='#5a5060'; mx.fillRect(px0,py0,TS,TS);
+      mx.fillStyle='#7a7088'; mx.fillRect(px0+2,py0+2,TS-4,TS-6);
+      mx.fillStyle='rgba(255,255,255,.08)'; mx.fillRect(px0+3,py0+3,TS-6,2);
+      mx.fillStyle='rgba(0,0,0,.35)'; mx.fillRect(px0,py0+TS-3,TS,3);
     }
     // Grid shadow lines (skip water)
     if(t!==3){ mx.fillStyle='rgba(0,0,0,.18)'; mx.fillRect(px0,py0+TS-1,TS,1); mx.fillRect(px0+TS-1,py0,1,TS); }
   }
-
-  // Zone territory tints (painted over tiles, under trees)
-  ZONES.forEach(z=>{ mx.fillStyle=z.color; mx.fillRect(z.x*TS,z.y*TS,z.w*TS,z.h*TS); });
 
   // Trees — layered for depth
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
