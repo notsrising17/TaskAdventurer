@@ -420,21 +420,37 @@ function domainHP(idx){
   return Math.max(0,Math.min(HP_MAX,hp));
 }
 
-function domainScore(idx){
+// One step = one "completion event": quest done, habit streak day, or target goal-hit
+function countDomainSteps(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
   let s=0;
   tasks.forEach(t=>{
-    if(t.type===T_QUEST) s+=t.done?10:0;
-    else if(t.type===T_HABIT) s+=(t.streak||0)*2;
-    else if(t.type===T_TARGET) s+=Math.floor((t.count||0)/(t.goal||1))*8;
+    if(t.type===T_QUEST) s+=t.done?1:0;
+    else if(t.type===T_HABIT) s+=(t.streak||0);
+    else if(t.type===T_TARGET) s+=Math.floor((t.count||0)/(t.goal||1));
   });
   return s;
 }
-const SCORE_TO_DEST=50;
-// Campaigns: each capture costs SCORE_TO_DEST points; progress is within the current campaign
+// Campaigns: each capture costs one full path worth of steps
 function domainProgress(idx){
   const caps=(state.captures&&state.captures[idx])||0;
-  return Math.max(0,Math.min(1,domainScore(idx)/SCORE_TO_DEST-caps));
+  const totalTiles=DOMAIN_TILES[idx].length;
+  const netSteps=countDomainSteps(idx)-caps*totalTiles;
+  return Math.max(0,Math.min(1,netSteps/totalTiles));
+}
+function domainCurrentStep(idx){
+  const caps=(state.captures&&state.captures[idx])||0;
+  const totalTiles=DOMAIN_TILES[idx].length;
+  return Math.max(0,Math.min(totalTiles,countDomainSteps(idx)-caps*totalTiles));
+}
+function getDomainPendingTasks(idx){
+  return state.tasks.filter(t=>{
+    if((t.domain||0)!==idx) return false;
+    if(t.type===T_QUEST) return !t.done;
+    if(t.type===T_HABIT) return true;
+    if(t.type===T_TARGET) return (t.count||0)<(t.goal||1);
+    return false;
+  });
 }
 function isCaptured(idx){ return ((state.captures&&state.captures[idx])||0)>0; }
 
@@ -517,7 +533,7 @@ function renderStats(){
     const b=document.getElementById('dbar'+i); if(!b) return;
     b.style.width=hp+'%'; b.style.backgroundColor=hpColor(hp);
     const pb=document.getElementById('dprog'+i); if(pb) pb.style.width=(prog*100)+'%';
-    const pl=document.getElementById('dpct'+i); if(pl) pl.textContent=Math.round(prog*100)+'%';
+    const pl=document.getElementById('dpct'+i); if(pl) pl.textContent=domainCurrentStep(i)+'/'+DOMAIN_TILES[i].length;
   });
   updatePortrait();
 }
@@ -1021,6 +1037,18 @@ function grassColor(tx,ty,v){
   return ['#1e4d1e','#236123','#1a431a'][v];
 }
 
+function pathTiles(waypts){
+  const tiles=[];
+  if(!waypts||!waypts.length) return tiles;
+  for(let i=0;i<waypts.length-1;i++){
+    const [ax,ay]=waypts[i],[bx,by]=waypts[i+1];
+    if(ax!==bx){ const dx=bx>ax?1:-1; for(let x=ax+dx;x!==bx+dx;x+=dx) tiles.push([x,ay]); }
+    if(ay!==by){ const dy=by>ay?1:-1; for(let y=ay+dy;y!==by+dy;y+=dy) tiles.push([bx,y]); }
+  }
+  return tiles;
+}
+const DOMAIN_TILES=DOMAINS.map(d=>pathTiles(d.path));
+
 function posOnPath(waypts,prog){
   if(!waypts||!waypts.length) return {x:6*TS+TS/2,y:10*TS+TS/2};
   if(prog<=0) return {x:waypts[0][0]*TS+TS/2,y:waypts[0][1]*TS+TS/2};
@@ -1155,13 +1183,34 @@ function drawMap(time){
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
     }
-    // Dotted trail showing the remaining route to the destination
+    // Faint dotted trail for orientation
     if(prog>0&&prog<1){
-      mx.fillStyle=d.color+'66';
+      mx.fillStyle=d.color+'33';
       for(let f=prog+0.04;f<1;f+=0.05){
         const pt=posOnPath(d.path,f);
         mx.fillRect(pt.x-1,pt.y-1,2,2);
       }
+    }
+    // Task markers: pending tasks appear as small flags on upcoming path tiles
+    {
+      const pending=getDomainPendingTasks(i);
+      const tiles=DOMAIN_TILES[i];
+      const step=domainCurrentStep(i);
+      pending.forEach((task,k)=>{
+        const tileIdx=step+k;
+        if(tileIdx>=tiles.length) return;
+        const [tx,ty]=tiles[tileIdx];
+        const px=tx*TS+TS/2, py=ty*TS+TS/2;
+        // Tile highlight
+        mx.fillStyle=d.color+'44';
+        mx.fillRect(tx*TS+1,ty*TS+1,TS-2,TS-2);
+        // Mini flag
+        const fc=task.type===T_QUEST?'#ffe040':task.type===T_HABIT?'#44eeff':'#ff9944';
+        mx.fillStyle=d.color+'cc';
+        mx.fillRect(px-1,py-8,1.5,7);
+        mx.fillStyle=fc;
+        mx.beginPath(); mx.moveTo(px-0.5,py-8); mx.lineTo(px+5,py-5); mx.lineTo(px-0.5,py-2); mx.closePath(); mx.fill();
+      });
     }
     // Status ring only when degraded — a healthy unit needs no alert
     const ulvl=hpLevelOf(hp);
@@ -1170,11 +1219,10 @@ function drawMap(time){
       mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
     }
     drawUnit(unitPos[i].x,unitPos[i].y,i,hp);
-    // Score plate under marching units — makes each task's contribution visible
+    // Tile progress plate under marching units
     if(prog>0&&prog<1){
-      const caps=(state.captures&&state.captures[i])||0;
-      const cur=Math.max(0,Math.round((domainScore(i)-caps*SCORE_TO_DEST)));
-      const txt=cur+'/'+SCORE_TO_DEST;
+      const step=domainCurrentStep(i);
+      const txt=step+'/'+DOMAIN_TILES[i].length;
       mx.font='3px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
       const tw2=mx.measureText(txt).width;
       mx.fillStyle='rgba(5,5,16,.8)'; mx.fillRect(unitPos[i].x-tw2/2-1.5,unitPos[i].y+11,tw2+3,5);
