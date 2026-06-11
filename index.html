@@ -18,7 +18,7 @@
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;background:#080810;color:var(--text);font-family:'Press Start 2P',monospace;overflow:hidden;overscroll-behavior:none;}
   #mapWrap{position:fixed;inset:0;background:#080810;}
-  #mapCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block;}
+  #townCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block;}
   #vignette{position:fixed;inset:0;pointer-events:none;
     background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(0,0,0,.55) 85%,rgba(0,0,0,.85) 100%);z-index:2;}
   .hud{position:fixed;z-index:5;}
@@ -348,10 +348,10 @@
     body[data-tab=QUESTS] #mapWrap,body[data-tab=QUESTS] #vignette{display:none;}
     body[data-tab=QUESTS] #portraitCol{display:none;}
     body[data-tab=QUESTS] #listPanel{top:54px;bottom:52px;max-height:none;background:#0a0818;}
-    /* WORLD: map only */
-    body[data-tab=WORLD] #listPanel{display:none;}
-    body[data-tab=WORLD] #portraitCol{display:none;}
-    body[data-tab=WORLD] #mapWrap,body[data-tab=WORLD] #vignette{bottom:52px;}
+    /* TOWN: town canvas only */
+    body[data-tab=TOWN] #listPanel{display:none;}
+    body[data-tab=TOWN] #portraitCol{display:none;}
+    body[data-tab=TOWN] #mapWrap,body[data-tab=TOWN] #vignette{bottom:52px;}
     /* PARTY: full-width roster */
     body[data-tab=PARTY] #mapWrap,body[data-tab=PARTY] #vignette{display:none;}
     body[data-tab=PARTY] #listPanel{display:none;}
@@ -375,9 +375,17 @@
     .cb{width:32px;height:32px;flex:0 0 32px;}
     .cb.checked::after{left:8px;top:3px;width:7px;height:13px;}
     #qcFab{bottom:64px;}
-    body[data-tab=WORLD] #qcFab{display:none;}
+    body[data-tab=TOWN] #qcFab{display:none;}
   }
 
+  /* Town build modal */
+  #townBuildWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:47;display:none;align-items:center;justify-content:center;padding:16px;}
+  #townBuildWrap.open{display:flex;}
+  #townBuildBox{width:100%;max-width:440px;max-height:82vh;display:flex;flex-direction:column;gap:8px;padding:14px;}
+  #townModalBody{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px;}
+  #townModalClose{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:0 0 auto;}
+  /* Party progression block */
+  .port-prog{font-size:8px;color:#9a8ad0;letter-spacing:1px;padding:4px 2px;line-height:1.8;width:100%;text-align:center;}
   /* Respect OS-level reduced-motion preference */
   @media(prefers-reduced-motion:reduce){
     .portCard.flash{animation:none;}
@@ -389,7 +397,7 @@
 </style>
 </head>
 <body>
-<div id="mapWrap"><canvas id="mapCanvas"></canvas></div>
+<div id="mapWrap"><canvas id="townCanvas"></canvas></div>
 <div id="vignette"></div>
 
 <div id="portraitCol"></div>
@@ -611,9 +619,17 @@
 
 <nav id="tabBar">
   <button class="tabBtn active" id="tabQuests" onclick="switchTab('QUESTS')">⚔ QUESTS</button>
-  <button class="tabBtn" id="tabWorld" onclick="switchTab('WORLD')">🥾 ROUTE</button>
+  <button class="tabBtn" id="tabTown" onclick="switchTab('TOWN')">🏰 TOWN</button>
   <button class="tabBtn" id="tabParty" onclick="switchTab('PARTY')">👥 PARTY</button>
 </nav>
+
+<div id="townBuildWrap" onclick="if(event.target===this)closeTownModal()">
+  <div id="townBuildBox" class="glass">
+    <div class="ck-title" id="townModalTitle">BUILD</div>
+    <div id="townModalBody"></div>
+    <button id="townModalClose" onclick="closeTownModal()">CLOSE</button>
+  </div>
+</div>
 
 <script>
 // ============ DOMAINS ============
@@ -739,6 +755,11 @@ function drawSheetPortrait(cv,sheetImg,lvl){
 
 function buildPortraitCol(){
   const col=document.getElementById('portraitCol');
+  // Best expedition banner — only shows once built
+  const bestBanner=document.createElement('div');
+  bestBanner.id='partyBestBanner';
+  bestBanner.style.cssText='font-size:8px;color:#9a8ad0;letter-spacing:1px;text-align:center;padding:6px 4px;';
+  col.appendChild(bestBanner);
   DOMAINS.forEach((d,i)=>{
     const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
     card.onclick=(e)=>{ if(!e.target.closest('.party-habits-btn,.party-preset-panel')) openFocus(i); };
@@ -752,6 +773,11 @@ function buildPortraitCol(){
     const chipWrap=document.createElement('div'); chipWrap.className='portChip'; chipWrap.id='portChip'+i; portInfo.appendChild(chipWrap);
     portRow.appendChild(portInfo);
     card.appendChild(portRow);
+
+    // Progression block: deeds, level, week leagues
+    const progBlock = document.createElement('div');
+    progBlock.className = 'port-prog'; progBlock.id = 'portProg'+i;
+    card.appendChild(progBlock);
 
     // "+ HABITS" button — opens inline preset picker for this domain
     const habBtn=document.createElement('button'); habBtn.className='party-habits-btn';
@@ -827,6 +853,30 @@ function drawPortraitPlaceholder(cv,d,lvl){
   if(lvl>=2){ g.strokeStyle=ART_COLOR[lvl]+'66'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2); }
 }
 
+function levelThresholds(){
+  const t=[]; let next=10,gap=15;
+  for(let i=0;i<20;i++){ t.push(next); next+=gap; gap+=15; }
+  return t;
+}
+function deedsLevel(deeds){
+  const t=levelThresholds();
+  let lv=0;
+  for(let i=0;i<t.length;i++){ if(deeds>=t[i]) lv=i+1; else break; }
+  return lv;
+}
+function incrementDeeds(domainIdx, delta){
+  if(domainIdx<0||domainIdx>=DOMAINS.length) return;
+  if(!Array.isArray(EXPEDITION.deeds)) EXPEDITION.deeds=[0,0,0,0,0];
+  const before=deedsLevel(EXPEDITION.deeds[domainIdx]||0);
+  EXPEDITION.deeds[domainIdx]=Math.max(0,(EXPEDITION.deeds[domainIdx]||0)+delta);
+  const after=deedsLevel(EXPEDITION.deeds[domainIdx]);
+  if(after>before){
+    const d=DOMAINS[domainIdx];
+    showToast('⚔ '+d.cls+' REACHES LEVEL '+after+'!',d.color);
+    logEvent('level',null,domainIdx);
+  }
+}
+
 function updatePortraits(){
   DOMAINS.forEach((d,i)=>{
     const lvl=domainArtLevel(i);
@@ -835,6 +885,14 @@ function updatePortraits(){
     if(cw){ cw.innerHTML=''; cw.appendChild(statusChip(i)); }
     // Active state if focus open
     const card=document.getElementById('pc'+i); if(card) card.classList.toggle('active',focusIdx===i);
+    // Progression block
+    const prog=document.getElementById('portProg'+i);
+    if(prog){
+      const deeds=(EXPEDITION.deeds||[])[i]||0;
+      const lv=deedsLevel(deeds);
+      const wkLeagues=domainWeekLeagues(i);
+      prog.textContent='LV '+lv+' · '+deeds+' DEEDS · '+wkLeagues+' LEAGUES THIS WK';
+    }
   });
 }
 function updatePortrait(){ updatePortraits(); }
@@ -936,6 +994,7 @@ function earnLeagues(t,ev,crit){
   if(EXPEDITION.ledger.length>500) EXPEDITION.ledger.splice(0,EXPEDITION.ledger.length-500);
   const after=Math.floor(EXPEDITION.leagues/LANDMARK_EVERY);
   saveExp();
+  if(townVisible()) flyCoin(amt);
   if(after>before) setTimeout(()=>showToast('⛺ LANDMARK REACHED — LEAGUE '+(after*LANDMARK_EVERY)+'!','#44cc44'),700);
   return amt;
 }
@@ -1801,6 +1860,10 @@ function renderList(){
   const el=document.getElementById('listBody'); el.innerHTML='';
   const offerEl=buildTokenOffer(); if(offerEl) el.appendChild(offerEl);
   el.appendChild(buildTodayStrip());
+  // Side quest card
+  const sqDiv = document.createElement('div'); sqDiv.id='sqCard';
+  el.appendChild(sqDiv);
+  drawSideQuestCard();
   const order=DOMAINS.map((_,i)=>i).sort((a,b)=>{
     const ao=domainStatus(a)==='BESIEGED',bo=domainStatus(b)==='BESIEGED';
     if(ao!==bo) return ao?-1:1;
@@ -2318,10 +2381,12 @@ function toggleTask(id){
       t.lastDone=null;
       logEvent('unhabit',t);
       refundLeagues(t,'habit');
+      incrementDeeds(t.domain||0,-1);
     } else {
       t.weekCount=(t.weekCount||0)+1;
       t.lastDone=todayStr();
       logEvent('habit',t);
+      incrementDeeds(t.domain||0,1);
       earnLeagues(t,'habit',rollCrit(t));
       sparkleParty();
       popTaskEl(id);
@@ -2342,14 +2407,15 @@ function toggleTask(id){
       t.doneCount=(t.doneCount||0)+1;
       t.lastDone=todayStr(); // lets the TODAY strip see today's completion
       logEvent('done',t);
+      incrementDeeds(t.domain||0,1);
       earnLeagues(t,'done',rollCrit(t));
       const base=(t.due&&t.due>=todayStr())?t.due:null;
       t.due=advanceDue(base,t.repeat);
       sparkleParty();
       showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due)+'!',d.color);
     }
-    else if(!t.done){ t.done=true; t.lastDone=todayStr(); logEvent('done',t); earnLeagues(t,'done',rollCrit(t)); sparkleParty(); popTaskEl(id); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
-    else { t.done=false; logEvent('undone',t); refundLeagues(t,'done'); }
+    else if(!t.done){ t.done=true; t.lastDone=todayStr(); logEvent('done',t); incrementDeeds(t.domain||0,1); earnLeagues(t,'done',rollCrit(t)); sparkleParty(); popTaskEl(id); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
+    else { t.done=false; logEvent('undone',t); incrementDeeds(t.domain||0,-1); refundLeagues(t,'done'); }
   }
   recalcDerived();save();refresh();
 }
@@ -2529,186 +2595,503 @@ function importData(file){
   r.readAsText(file);
 }
 
-// ============ ROUTE (Expedition side-scroller) ============
-// One shared run replaces the tactical map. No tileset: a sky band, a
-// ground band, the party sprites walking, and small landmark markers.
-// Debt never appears here — the route only ever shows possibility.
-const mc=document.getElementById('mapCanvas');
-const mx=mc.getContext('2d');
-const REDUCED_MOTION=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-let sparkles=[];
-let partyScreen={x:0,y:0}; // updated each frame — anchor for completion sparkles
-function sparkleParty(){
-  if(REDUCED_MOTION) return;
-  const x=partyScreen.x||mc.width/2, y=partyScreen.y||mc.height/2;
-  for(let i=0;i<12;i++) sparkles.push({x,y,a:Math.PI/6*i,t:0});
-}
-function fitMap(){
-  // Render at device resolution (capped at 2x) so canvas text is crisp on retina
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  mc.width=Math.round(window.innerWidth*dpr);
-  mc.height=Math.round(Math.max(340,window.innerHeight)*dpr);
-}
-window.addEventListener('resize',fitMap);
+// ============ TOWN VIEW ============
+const TOWN_LAYOUT = {
+  castle: {x:0.5, y:0.42, w:0.22, h:0.28},
+  plots: [
+    {x:0.15, y:0.28, w:0.13, h:0.13},
+    {x:0.72, y:0.28, w:0.13, h:0.13},
+    {x:0.10, y:0.50, w:0.12, h:0.12},
+    {x:0.78, y:0.50, w:0.12, h:0.12},
+    {x:0.18, y:0.68, w:0.14, h:0.14},
+    {x:0.68, y:0.68, w:0.14, h:0.14},
+    {x:0.32, y:0.75, w:0.12, h:0.12},
+    {x:0.56, y:0.75, w:0.12, h:0.12},
+  ]
+};
+const CASTLE_TIERS = [
+  {name:'KEEP', cost:0},
+  {name:'STONE KEEP', cost:120},
+  {name:'CASTLE', cost:300},
+  {name:'GRAND CASTLE', cost:600},
+];
+const STRUCTURES = [
+  {key:'well',    name:'WELL',         cost:20},
+  {key:'garden',  name:'GARDEN',       cost:25},
+  {key:'cottage', name:'COTTAGE',      cost:35},
+  {key:'market',  name:'MARKET STALL', cost:40},
+  {key:'tavern_s',name:'TAVERN',       cost:50},
+  {key:'smithy',  name:'SMITHY',       cost:60},
+  {key:'chapel',  name:'CHAPEL',       cost:75},
+  {key:'fountain',name:'FOUNTAIN',     cost:80},
+  {key:'walls',   name:'WALLS',        cost:100},
+  {key:'statue',  name:'STATUE',       cost:150},
+];
 
-// Deterministic per-week scenery: the same week always rolls the same route
+const tc = document.getElementById('townCanvas');
+const tx = tc.getContext('2d');
+const REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// hashStr is needed for side quests
 function hashStr(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
-function landmarkKind(k){ return hashStr((EXPEDITION.week||mondayStr())+'#'+k)%4; } // 0 waystone 1 bridge 2 shrine 3 village
 
-let visL=0;                 // animated league position (eases toward the real count)
-let peek=0,peekDrag=null;   // swipe-to-peek offset in canvas px; snaps back on release
+function sparkleParty(){ }
 
-function drawLandmark(x,y,kind,lit,s){
-  const main=lit?'#c8a840':'#4a4068', dark=lit?'#7a6010':'#2a2448';
-  if(kind===0){ // waystone
-    mx.fillStyle=main; mx.fillRect(x-5*s,y-20*s,10*s,20*s);
-    mx.fillStyle=dark; mx.fillRect(x-3*s,y-16*s,6*s,4*s);
-  } else if(kind===1){ // bridge
-    mx.strokeStyle=main; mx.lineWidth=3*s;
-    mx.beginPath(); mx.arc(x,y,14*s,Math.PI,0); mx.stroke();
-    mx.fillStyle=dark; mx.fillRect(x-17*s,y-3*s,5*s,5*s); mx.fillRect(x+12*s,y-3*s,5*s,5*s);
-  } else if(kind===2){ // shrine
-    mx.fillStyle=dark; mx.fillRect(x-8*s,y-14*s,3*s,14*s); mx.fillRect(x+5*s,y-14*s,3*s,14*s);
-    mx.fillStyle=main; mx.fillRect(x-11*s,y-18*s,22*s,4*s); mx.fillRect(x-9*s,y-12*s,18*s,3*s);
-  } else { // village — two huts
-    mx.fillStyle=dark; mx.fillRect(x-12*s,y-10*s,10*s,10*s); mx.fillRect(x+2*s,y-13*s,11*s,13*s);
-    mx.fillStyle=main;
-    mx.beginPath(); mx.moveTo(x-13*s,y-10*s); mx.lineTo(x-7*s,y-16*s); mx.lineTo(x-1*s,y-10*s); mx.closePath(); mx.fill();
-    mx.beginPath(); mx.moveTo(x+1*s,y-13*s); mx.lineTo(x+7.5*s,y-20*s); mx.lineTo(x+14*s,y-13*s); mx.closePath(); mx.fill();
-    if(lit){ mx.fillStyle='#ffe080'; mx.fillRect(x-9*s,y-6*s,3*s,3*s); mx.fillRect(x+6*s,y-8*s,3*s,3*s); }
+function fitTown(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  tc.width=Math.round(window.innerWidth*dpr);
+  tc.height=Math.round(Math.max(340,window.innerHeight)*dpr);
+}
+window.addEventListener('resize',fitTown);
+
+// Art image cache
+const _townImgs = {};
+function townImg(name, onLoad){
+  if(_townImgs[name]) return _townImgs[name];
+  const img = new Image();
+  img.src = 'town/' + name;
+  img.onload = () => { if(onLoad) onLoad(); };
+  img.onerror = () => { img._failed = true; };
+  _townImgs[name] = img;
+  return img;
+}
+
+// Coin flight state
+let coinFlights = [];
+let _townRafId = null;
+
+function drawTownPlaceholder(ctx, x, y, w, h, label, color){
+  ctx.fillStyle = color || '#1a1438';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#4a3a8a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = '#9a8ad0';
+  ctx.font = Math.max(8, Math.min(11, w/8)) + 'px "Press Start 2P",monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const words = (label||'').split(' ');
+  if(words.length <= 2){
+    ctx.fillText(label||'', x+w/2, y+h/2);
+  } else {
+    ctx.fillText(words[0], x+w/2, y+h/2 - 8);
+    ctx.fillText(words.slice(1).join(' '), x+w/2, y+h/2 + 8);
   }
 }
 
-function drawRoute(time){
-  const W=mc.width,H=mc.height;
-  mx.imageSmoothingEnabled=false;
-  const s=Math.max(1,H/420);   // scene scale
-  const LP=Math.min(64*s,W/7); // px per league — keep ~7 leagues visible on narrow screens
-  const horizon=H*0.60;
-  const target=EXPEDITION.leagues||0;
-  if(REDUCED_MOTION||visL>target) visL=target;
-  else if(visL<target) visL=Math.min(target,visL+0.02+(target-visL)*0.02);
-  if(peekDrag===null&&peek!==0){ peek*=0.85; if(Math.abs(peek)<0.5) peek=0; }
+function drawTownFrame(time){
+  const W = tc.width, H = tc.height;
+  tx.imageSmoothingEnabled = false;
 
-  // Sky band
-  const sky=mx.createLinearGradient(0,0,0,horizon);
-  sky.addColorStop(0,'#070616'); sky.addColorStop(1,'#1a1438');
-  mx.fillStyle=sky; mx.fillRect(0,0,W,horizon);
-  // Stars — fixed positions, gentle twinkle
-  for(let i=0;i<60;i++){
-    const hx=hashStr('star'+i);
-    const sx2=(hx%997)/997*W, sy2=((hx>>10)%797)/797*horizon*0.85;
-    mx.globalAlpha=Math.min(1,0.25+((hx>>20)%10)/14+(Math.sin(time/700+i)+1)/8);
-    mx.fillStyle='#fff'; mx.fillRect(sx2,sy2,2,2);
-  }
-  mx.globalAlpha=1;
-  // Moon — below the HUD text band
-  mx.fillStyle='#e8e0c8'; mx.beginPath(); mx.arc(W*0.86,horizon*0.38,14*s,0,7); mx.fill();
-  mx.fillStyle='#0b0920'; mx.beginPath(); mx.arc(W*0.86+6*s,horizon*0.38-4*s,12*s,0,7); mx.fill();
+  // Sky
+  const sky = tx.createLinearGradient(0, 0, 0, H * 0.55);
+  sky.addColorStop(0, '#070616');
+  sky.addColorStop(1, '#1a1438');
+  tx.fillStyle = sky;
+  tx.fillRect(0, 0, W, H * 0.55);
 
-  const camX=visL*LP-W*0.52+peek;  // world px at the screen's left edge (party slightly right of center)
-  const X=l=>l*LP-camX;            // league → screen x
+  // Ground
+  const grd = tx.createLinearGradient(0, H * 0.55, 0, H);
+  grd.addColorStop(0, '#1d1830');
+  grd.addColorStop(1, '#0c0a18');
+  tx.fillStyle = grd;
+  tx.fillRect(0, H * 0.55, W, H * 0.45);
 
-  // Far hills — parallax silhouette
-  mx.fillStyle='#120e2a';
-  mx.beginPath(); mx.moveTo(0,horizon);
-  for(let px2=0;px2<=W;px2+=24){
-    const wx=(px2+camX*0.3)/120;
-    mx.lineTo(px2,horizon-(18+Math.sin(wx)*10+Math.sin(wx*2.7)*6)*s);
-  }
-  mx.lineTo(W,horizon); mx.closePath(); mx.fill();
-
-  // Ground band
-  const grd=mx.createLinearGradient(0,horizon,0,H);
-  grd.addColorStop(0,'#1d1830'); grd.addColorStop(1,'#0c0a18');
-  mx.fillStyle=grd; mx.fillRect(0,horizon,W,H-horizon);
-  const pathY=horizon+38*s;
-  mx.strokeStyle='#3a3060'; mx.lineWidth=3*s;
-  mx.beginPath(); mx.moveTo(0,pathY); mx.lineTo(W,pathY); mx.stroke();
-
-  mx.font=Math.round(7*s)+'px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='alphabetic';
-  const l0=Math.max(0,Math.floor(camX/LP)-1), l1=Math.ceil((camX+W)/LP)+1;
-  // League ticks
-  for(let l=l0;l<=l1;l++){
-    const x=X(l); if(x<-40||x>W+40) continue;
-    mx.fillStyle='#2a2050'; mx.fillRect(x-1,pathY-4*s,2,8*s);
-  }
-  // Landmarks every LANDMARK_EVERY leagues — reached ones light up gold
-  for(let l=Math.max(LANDMARK_EVERY,Math.ceil(l0/LANDMARK_EVERY)*LANDMARK_EVERY);l<=l1;l+=LANDMARK_EVERY){
-    const x=X(l); if(x<-80||x>W+80) continue;
-    const lit=l<=Math.floor(visL);
-    drawLandmark(x,pathY-2*s,landmarkKind(l/LANDMARK_EVERY),lit,s);
-    mx.fillStyle=lit?'#ffd700':'#5a5080';
-    mx.fillText(String(l),x,pathY+18*s);
+  // Sky image or stars
+  const skyImg = townImg('sky.png', drawTown);
+  if(skyImg.complete && !skyImg._failed && skyImg.naturalWidth > 0){
+    tx.drawImage(skyImg, 0, 0, W, H * 0.55);
+  } else {
+    // stars
+    for(let i=0;i<40;i++){
+      const h2=hashStr('star'+i);
+      const sx=(h2%997)/997*W, sy=((h2>>10)%797)/797*H*0.45;
+      tx.globalAlpha=Math.min(1,0.2+((h2>>20)%10)/14+(Math.sin((time||0)/700+i)+1)/8);
+      tx.fillStyle='#fff'; tx.fillRect(sx,sy,2,2);
+    }
+    tx.globalAlpha=1;
   }
 
-  // Waypoints ahead: quests due this week, still pending. Clear them for
-  // bonus leagues, walk past them for free — never obstacles.
-  const wps=state.tasks.filter(t=>!isTavern(t)&&t.type===T_QUEST&&!t.done&&dueThisWeek(t)&&!hasChildren(t)).slice(0,8);
-  wps.forEach((t,i)=>{
-    const x=X(Math.floor(visL)+2+i*2); if(x<-40||x>W+40) return;
-    const dcol=DOMAINS[Math.max(0,t.domain||0)].color;
-    mx.strokeStyle='#bbb'; mx.lineWidth=1.5*s;
-    mx.beginPath(); mx.moveTo(x,pathY); mx.lineTo(x,pathY-24*s); mx.stroke();
-    mx.fillStyle=dcol;
-    mx.beginPath(); mx.moveTo(x,pathY-24*s); mx.lineTo(x+12*s,pathY-19*s); mx.lineTo(x,pathY-14*s); mx.closePath(); mx.fill();
+  // Ground image
+  const groundImg = townImg('ground.png', drawTown);
+  if(groundImg.complete && !groundImg._failed && groundImg.naturalWidth > 0){
+    tx.drawImage(groundImg, 0, H * 0.55, W, H * 0.45);
+  }
+
+  // Castle
+  const town = EXPEDITION.town || {castleTier:1, plots:{}};
+  const tier = (town.castleTier || 1) - 1;
+  const castleInfo = CASTLE_TIERS[tier] || CASTLE_TIERS[0];
+  const cl = TOWN_LAYOUT.castle;
+  const cx = Math.round(cl.x * W - cl.w * W / 2);
+  const cy = Math.round(cl.y * H - cl.h * H / 2);
+  const cw = Math.round(cl.w * W);
+  const ch = Math.round(cl.h * H);
+
+  const castleImgName = 'castle_' + (tier+1) + '.png';
+  const castleImg = townImg(castleImgName, drawTown);
+  if(castleImg.complete && !castleImg._failed && castleImg.naturalWidth > 0){
+    tx.drawImage(castleImg, cx, cy, cw, ch);
+  } else {
+    drawTownPlaceholder(tx, cx, cy, cw, ch, castleInfo.name, '#2a1a48');
+    tx.fillStyle = '#3a2a5a';
+    tx.fillRect(cx + 4, cy + 4, cw * 0.22, ch * 0.4);
+    tx.fillRect(cx + cw * 0.78, cy + 4, cw * 0.22, ch * 0.4);
+    tx.fillRect(cx + cw * 0.25, cy + ch * 0.1, cw * 0.5, ch * 0.7);
+    tx.fillStyle = '#ffd700';
+    tx.font = Math.max(8, Math.min(10, cw/12)) + 'px "Press Start 2P",monospace';
+    tx.textAlign = 'center';
+    tx.textBaseline = 'middle';
+    tx.fillText(castleInfo.name, cx+cw/2, cy+ch/2);
+  }
+
+  // Plots
+  TOWN_LAYOUT.plots.forEach((pl, i) => {
+    const px = Math.round(pl.x * W - pl.w * W / 2);
+    const py = Math.round(pl.y * H - pl.h * H / 2);
+    const pw = Math.round(pl.w * W);
+    const ph = Math.round(pl.h * H);
+    const built = (town.plots||{})[i];
+    if(built){
+      const struct = STRUCTURES.find(s=>s.key===built.key);
+      const sImg = townImg(built.key + '.png', drawTown);
+      if(sImg.complete && !sImg._failed && sImg.naturalWidth > 0){
+        tx.drawImage(sImg, px, py, pw, ph);
+      } else {
+        drawTownPlaceholder(tx, px, py, pw, ph, struct?struct.name:built.key, '#1a2a3a');
+      }
+    } else {
+      tx.fillStyle = 'rgba(255,215,0,0.04)';
+      tx.fillRect(px, py, pw, ph);
+      tx.strokeStyle = '#3a3060';
+      tx.lineWidth = 1;
+      tx.setLineDash([4, 4]);
+      tx.strokeRect(px+1, py+1, pw-2, ph-2);
+      tx.setLineDash([]);
+      tx.fillStyle = '#4a4068';
+      tx.font = Math.max(6, Math.min(9, pw/8)) + 'px "Press Start 2P",monospace';
+      tx.textAlign = 'center';
+      tx.textBaseline = 'middle';
+      tx.fillText('+', px+pw/2, py+ph/2);
+    }
   });
 
-  // FARTHEST CAMP — personal best, visible ahead on the route
-  if((EXPEDITION.best||0)>0&&EXPEDITION.best>visL){
-    const x=X(EXPEDITION.best);
-    if(x>-120&&x<W+120){
-      mx.strokeStyle='#c8a840'; mx.lineWidth=2*s;
-      mx.beginPath(); mx.moveTo(x,pathY); mx.lineTo(x,pathY-32*s); mx.stroke();
-      mx.fillStyle='#ffd700';
-      mx.beginPath(); mx.moveTo(x,pathY-32*s); mx.lineTo(x+16*s,pathY-25*s); mx.lineTo(x,pathY-18*s); mx.closePath(); mx.fill();
-      mx.fillStyle='#c8a840'; mx.fillText('FARTHEST CAMP',x,pathY-38*s);
+  // Avatar near castle gate
+  const avImg = townImg('avatar.png', drawTown);
+  const avX = cx + cw * 0.45, avY = cy + ch - 2;
+  const avS = Math.round(Math.min(cw, ch) * 0.22);
+  if(avImg.complete && !avImg._failed && avImg.naturalWidth > 0){
+    tx.drawImage(avImg, avX - avS/2, avY - avS, avS, avS);
+  } else {
+    const s = avS / 20;
+    tx.fillStyle = '#c8b8ff';
+    tx.fillRect(avX - 3*s, avY - 18*s, 6*s, 6*s);
+    tx.fillStyle = '#8a5a30';
+    tx.fillRect(avX - 2*s, avY - 12*s, 4*s, 8*s);
+    tx.fillRect(avX - 5*s, avY - 11*s, 3*s, 5*s);
+    tx.fillRect(avX + 2*s, avY - 11*s, 3*s, 5*s);
+    tx.fillRect(avX - 3*s, avY - 4*s, 2*s, 4*s);
+    tx.fillRect(avX + 1*s, avY - 4*s, 2*s, 4*s);
+  }
+
+  // HUD header
+  const s = Math.max(1, H/420);
+  tx.font = Math.round(10*s) + 'px "Press Start 2P",monospace';
+  tx.textAlign = 'center';
+  tx.textBaseline = 'alphabetic';
+  tx.fillStyle = '#ffd700';
+  tx.fillText('⚜ ' + (EXPEDITION.gold||0) + ' GOLD', W/2, 36*s);
+  tx.font = Math.round(7*s) + 'px "Press Start 2P",monospace';
+  tx.fillStyle = '#9a8ad0';
+  const nextIn = LANDMARK_EVERY - (Math.floor(EXPEDITION.leagues||0) % LANDMARK_EVERY) || LANDMARK_EVERY;
+  tx.fillText('THIS WEEK\'S EXPEDITION: ' + Math.floor(EXPEDITION.leagues||0) + ' LEAGUES · NEXT LANDMARK ' + nextIn, W/2, 54*s);
+
+  // Coin flights
+  coinFlights = coinFlights.filter(f => {
+    f.t += 0.03;
+    if(f.t >= 1) return false;
+    const ease = 1 - Math.pow(1-f.t, 2);
+    const fx = f.sx + (f.ex - f.sx) * ease;
+    const fy = f.sy + (f.ey - f.sy) * ease - Math.sin(f.t * Math.PI) * 40;
+    tx.globalAlpha = 1 - f.t;
+    tx.fillStyle = '#ffd700';
+    tx.beginPath();
+    tx.arc(fx, fy, 6, 0, 7);
+    tx.fill();
+    tx.globalAlpha = 1;
+    if(f.t > 0.7){
+      tx.fillStyle = '#ffd700';
+      tx.font = Math.round(8*s) + 'px "Press Start 2P",monospace';
+      tx.textAlign = 'center';
+      tx.fillText('+' + f.amt, f.ex, f.ey - 20);
     }
-  }
-
-  // The party — five sprites in a loose cluster, the domain that earned
-  // the last leagues leads the step animation at the front
-  const marching=visL<target-0.01;
-  const lead=Math.max(0,Math.min(DOMAINS.length-1,EXPEDITION.lastLeader||0));
-  const order=[lead,...DOMAINS.map((_,i)=>i).filter(i=>i!==lead)];
-  const px=X(visL);
-  const SP=42*s;
-  for(let k=order.length-1;k>=0;k--){ // draw back of the cluster first
-    const i=order[k];
-    const off=k===0?0:-(k*22*s)-6*s;
-    const bob=marching?Math.abs(Math.sin(time/130+k*1.3))*3*s:Math.sin(time/600+k)*0.8*s;
-    const x=px+off;
-    // shadow always on path; sprite feet stay at pathY, head bobs up
-    mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(x,pathY+1*s,8*s,2.5*s,0,0,7); mx.fill();
-    const img=domainSpriteImgs[i];
-    if(img&&img.complete&&img.naturalWidth>0) mx.drawImage(img,x-SP/2,pathY-SP-bob,SP,SP);
-    else { mx.fillStyle=DOMAINS[i].color; mx.fillRect(x-6*s,y-16*s,12*s,16*s); }
-  }
-  partyScreen={x:px,y:pathY-SP*0.6};
-  // Banner above the leader — newest cosmetic owned
-  const banners=(EXPEDITION.upgrades&&EXPEDITION.upgrades.banners)||[];
-  if(banners.length){
-    const bcol=({crimson:'#cc2244',gilded:'#ffd700',wolf:'#8a9ab8'})[banners[banners.length-1]]||'#ffd700';
-    mx.strokeStyle='#bbb'; mx.lineWidth=1.4*s;
-    mx.beginPath(); mx.moveTo(px+2*s,pathY-SP); mx.lineTo(px+2*s,pathY-SP-18*s); mx.stroke();
-    mx.fillStyle=bcol;
-    mx.beginPath(); mx.moveTo(px+2*s,pathY-SP-18*s); mx.lineTo(px+15*s,pathY-SP-13*s+Math.sin(time/350)*s); mx.lineTo(px+2*s,pathY-SP-8*s); mx.closePath(); mx.fill();
-  }
-
-  // Sparkles
-  sparkles.forEach(sp=>{ sp.t+=0.05; const r=sp.t*30*s,a=1-sp.t; if(a>0){ mx.fillStyle='rgba(255,255,180,'+a+')'; mx.fillRect(sp.x+Math.cos(sp.a)*r-2,sp.y+Math.sin(sp.a)*r-2,4,4); } });
-  sparkles=sparkles.filter(sp=>sp.t<1);
-
-  // HUD — the one readable number
-  mx.font=Math.round(15*s)+'px "Press Start 2P",monospace';
-  mx.fillStyle='#ffd700';
-  mx.fillText('LEAGUE '+Math.floor(target),W/2,42*s);
-  mx.font=Math.round(8*s)+'px "Press Start 2P",monospace';
-  mx.fillStyle='#9a8ad0';
-  const nextIn=LANDMARK_EVERY-(Math.floor(target)%LANDMARK_EVERY)||LANDMARK_EVERY;
-  mx.fillText('⛺ NEXT LANDMARK IN '+nextIn+'   ⚜ '+(EXPEDITION.gold||0)+' GOLD',W/2,62*s);
+    return true;
+  });
 }
 
+function drawTown(){
+  drawTownFrame(0);
+}
+
+function townVisible(){ return !mobileMQ.matches || currentTab === 'TOWN'; }
+
+function startTownRaf(){
+  if(_townRafId !== null) return;
+  if(coinFlights.length === 0) return;
+  function loop(time){
+    if(!townVisible() || coinFlights.length === 0){ _townRafId = null; return; }
+    drawTownFrame(time);
+    _townRafId = requestAnimationFrame(loop);
+  }
+  _townRafId = requestAnimationFrame(loop);
+}
+
+function flyCoin(amt){
+  if(REDUCED_MOTION){
+    drawTown();
+    return;
+  }
+  const W = tc.width, H = tc.height;
+  const cl = TOWN_LAYOUT.castle;
+  coinFlights.push({
+    sx: W/2, sy: H - 40,
+    ex: Math.round(cl.x * W), ey: Math.round(cl.y * H),
+    amt, t: 0
+  });
+  startTownRaf();
+}
+
+function closeTownModal(){ document.getElementById('townBuildWrap').classList.remove('open'); }
+
+function openTownModal(title, bodyFn){
+  document.getElementById('townModalTitle').textContent = title;
+  const body = document.getElementById('townModalBody');
+  body.innerHTML = '';
+  bodyFn(body);
+  document.getElementById('townBuildWrap').classList.add('open');
+}
+
+function townPlotClick(i){
+  const town = EXPEDITION.town || {castleTier:1, plots:{}};
+  const built = (town.plots||{})[i];
+  if(built){
+    const struct = STRUCTURES.find(s=>s.key===built.key);
+    openTownModal(struct ? struct.name : built.key, body => {
+      const d = document.createElement('div'); d.style.cssText='font-size:9px;color:#9a8ad0;letter-spacing:1px;line-height:1.8;';
+      d.innerHTML = 'BUILT: ' + (built.boughtDate||'UNKNOWN') + '<br>PLOT: ' + (i+1);
+      body.appendChild(d);
+    });
+  } else {
+    openTownModal('BUILD ON PLOT ' + (i+1), body => {
+      STRUCTURES.forEach(s => {
+        const row = document.createElement('div'); row.className='shopRow';
+        const info = document.createElement('div'); info.className='shopInfo';
+        const nm = document.createElement('div'); nm.className='shopName'; nm.textContent=s.name;
+        const desc = document.createElement('div'); desc.className='shopDesc'; desc.textContent='COST: '+s.cost+' GOLD';
+        info.appendChild(nm); info.appendChild(desc); row.appendChild(info);
+        const btn = document.createElement('button'); btn.className='shopBuy';
+        btn.textContent = 'BUILD '+s.cost+'⚜';
+        btn.disabled = (EXPEDITION.gold||0) < s.cost;
+        btn.onclick = () => {
+          if((EXPEDITION.gold||0) < s.cost) return;
+          EXPEDITION.gold -= s.cost;
+          if(!EXPEDITION.town) EXPEDITION.town = {castleTier:1, plots:{}};
+          EXPEDITION.town.plots[i] = {key:s.key, boughtDate:todayStr()};
+          saveExp(); drawTown(); closeTownModal();
+          showToast('⚜ '+s.name+' BUILT!', '#ffd700');
+        };
+        row.appendChild(btn);
+        body.appendChild(row);
+      });
+    });
+  }
+}
+
+function townCastleClick(){
+  const town = EXPEDITION.town || {castleTier:1, plots:{}};
+  const tier = (town.castleTier||1);
+  const nextTier = CASTLE_TIERS[tier];
+  openTownModal('⚜ ' + CASTLE_TIERS[tier-1].name, body => {
+    const info = document.createElement('div'); info.style.cssText='font-size:9px;color:#9a8ad0;letter-spacing:1px;line-height:1.8;';
+    info.innerHTML = 'CASTLE TIER: ' + tier + ' OF 4<br>GOLD: ' + (EXPEDITION.gold||0);
+    body.appendChild(info);
+    if(nextTier){
+      const row = document.createElement('div'); row.className='shopRow';
+      const ri = document.createElement('div'); ri.className='shopInfo';
+      const nm = document.createElement('div'); nm.className='shopName'; nm.textContent='UPGRADE TO '+nextTier.name;
+      const desc = document.createElement('div'); desc.className='shopDesc'; desc.textContent='COST: '+nextTier.cost+' GOLD';
+      ri.appendChild(nm); ri.appendChild(desc); row.appendChild(ri);
+      const btn = document.createElement('button'); btn.className='shopBuy';
+      btn.textContent = 'UPGRADE '+nextTier.cost+'⚜';
+      btn.disabled = (EXPEDITION.gold||0) < nextTier.cost;
+      btn.onclick = () => {
+        if((EXPEDITION.gold||0) < nextTier.cost) return;
+        EXPEDITION.gold -= nextTier.cost;
+        EXPEDITION.town.castleTier = tier + 1;
+        saveExp(); drawTown(); closeTownModal();
+        showToast('⚜ CASTLE UPGRADED TO '+nextTier.name+'!', '#ffd700');
+      };
+      row.appendChild(btn); body.appendChild(row);
+    } else {
+      const d = document.createElement('div'); d.style.cssText='font-size:9px;color:#44cc44;letter-spacing:1px;';
+      d.textContent='MAX TIER REACHED'; body.appendChild(d);
+    }
+  });
+}
+
+// Town canvas click handler
+tc.addEventListener('click', e => {
+  if(!townVisible()) return;
+  const rect = tc.getBoundingClientRect();
+  const scaleX = tc.width / rect.width;
+  const scaleY = tc.height / rect.height;
+  const mx2 = (e.clientX - rect.left) * scaleX;
+  const my2 = (e.clientY - rect.top) * scaleY;
+  const W = tc.width, H = tc.height;
+
+  // Check castle
+  const cl = TOWN_LAYOUT.castle;
+  const cx = cl.x*W - cl.w*W/2, cy = cl.y*H - cl.h*H/2;
+  const cw = cl.w*W, ch = cl.h*H;
+  if(mx2>=cx && mx2<=cx+cw && my2>=cy && my2<=cy+ch){ townCastleClick(); return; }
+
+  // Check plots
+  for(let i=0; i<TOWN_LAYOUT.plots.length; i++){
+    const pl = TOWN_LAYOUT.plots[i];
+    const px2=pl.x*W-pl.w*W/2, py2=pl.y*H-pl.h*H/2, pw=pl.w*W, ph=pl.h*H;
+    if(mx2>=px2 && mx2<=px2+pw && my2>=py2 && my2<=py2+ph){ townPlotClick(i); return; }
+  }
+});
+
+
+// ============ SIDE QUESTS ============
+let _sqCache = null;
+let _sqLoading = null;
+
+const SQ_FALLBACK = [
+  {id:'sq01',rarity:'common',gold:5, hook:"THE SCRIBE'S LEDGER",  action:'Write down three things that went well today, and why.'},
+  {id:'sq02',rarity:'rare',  gold:12,hook:'A COURIER WAITS',      action:'Send someone a short message of genuine thanks for something specific.'},
+  {id:'sq03',rarity:'common',gold:5, hook:'SAVOR THE PROVISIONS', action:'Eat one meal or snack today with no screen, paying attention to it.'},
+  {id:'sq11',rarity:'common',gold:6, hook:'SCOUT THE PERIMETER',  action:'Take a 10-minute walk outside, no destination required.'},
+  {id:'sq17',rarity:'common',gold:5, hook:"THE CARTOGRAPHER'S MINUTE", action:'Sit quietly and follow your breath for three minutes.'},
+];
+
+function parseSideQuestsTSV(text){
+  const sq=[];
+  text.split('\n').forEach((raw,i)=>{
+    const line=raw.trim();
+    if(!line||line.startsWith('#')) return;
+    const fields=line.split('\t');
+    if(fields[0]==='id') return;
+    if(fields.length<5){
+      console.warn('sidequests.tsv line '+(i+1)+': expected 5 fields, got '+fields.length+' — skipping');
+      return;
+    }
+    const [id,rarity,goldStr,hook,action]=fields;
+    const gold=parseInt(goldStr,10)||5;
+    if(!id||!hook||!action){
+      console.warn('sidequests.tsv line '+(i+1)+': missing required field — skipping');
+      return;
+    }
+    sq.push({id:id.trim(),rarity:(rarity||'common').trim(),gold,hook:hook.trim(),action:action.trim()});
+  });
+  return sq;
+}
+
+function loadSideQuests(){
+  if(_sqCache) return Promise.resolve(_sqCache);
+  if(_sqLoading) return _sqLoading;
+  _sqLoading = fetch('./sidequests.tsv')
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(text=>{ _sqCache=parseSideQuestsTSV(text); _sqLoading=null; return _sqCache; })
+    .catch(()=>{ _sqCache=SQ_FALLBACK.slice(); _sqLoading=null; return _sqCache; });
+  return _sqLoading;
+}
+
+function todaySQ(){
+  const today=todayStr();
+  if(META.sqDate!==today){
+    META.sqDate=today;
+    META.sqRerolled=false;
+    META.sqDone=false;
+    META.sqId='';
+    saveMeta();
+  }
+  return {date:today, id:META.sqId, rerolled:META.sqRerolled, done:META.sqDone};
+}
+
+function pickSQ(sqs, seedStr, exclude){
+  const seed=hashStr(seedStr);
+  const rare=(seed%7)===0;
+  const pool=sqs.filter(s=>(rare?s.rarity==='rare':s.rarity==='common')&&!exclude.includes(s.id));
+  const fallPool=sqs.filter(s=>!exclude.includes(s.id));
+  const chosen=(pool.length?pool:fallPool.length?fallPool:sqs);
+  return chosen[Math.abs(seed)%chosen.length]||sqs[0];
+}
+
+function drawSideQuestCard(){
+  const el=document.getElementById('sqCard'); if(!el) return;
+  const sq=todaySQ();
+  el.innerHTML='';
+  loadSideQuests().then(sqs=>{
+    let cur=sqs.find(s=>s.id===sq.id);
+    if(!cur&&!sq.id){
+      const picked=pickSQ(sqs,META.sqDate,META.sqHistory||[]);
+      META.sqId=picked.id;
+      if(!(META.sqHistory||[]).includes(picked.id)){
+        META.sqHistory=[(META.sqHistory||[]),...[picked.id]].slice(-10);
+      }
+      saveMeta();
+      cur=picked;
+    }
+    if(!cur) return;
+    if(sq.done){
+      const d=document.createElement('div'); d.className='dgroup';
+      d.style.opacity='0.5';
+      d.innerHTML='<div class="dgSub" style="color:#44cc44;letter-spacing:1px;">📜 SIDE QUEST COMPLETE · '+cur.hook+'</div>';
+      el.appendChild(d);
+      return;
+    }
+    const grp=document.createElement('div'); grp.className='dgroup';
+    grp.style.borderColor='#6a5a30';
+    const head=document.createElement('div'); head.className='dgHead';
+    const ttl=document.createElement('span'); ttl.className='dgCls'; ttl.style.color='#c8a840';
+    ttl.textContent='📜 SIDE QUEST · '+cur.hook;
+    head.appendChild(ttl); grp.appendChild(head);
+    const act=document.createElement('div'); act.className='dgSub'; act.style.lineHeight='1.7';
+    act.textContent=cur.action; grp.appendChild(act);
+    const goldLbl=document.createElement('div'); goldLbl.className='dgSub';
+    goldLbl.textContent='⚜ REWARD: '+cur.gold+' GOLD'; goldLbl.style.color='#ffd700';
+    grp.appendChild(goldLbl);
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:4px;';
+    const doneBtn=document.createElement('button'); doneBtn.className='miniBtn';
+    doneBtn.textContent='✓ COMPLETE';
+    doneBtn.onclick=()=>{
+      EXPEDITION.gold+=(cur.gold||0); saveExp();
+      META.sqDone=true; saveMeta();
+      logEvent('side',null,undefined);
+      drawSideQuestCard();
+      showToast('📜 SIDE QUEST COMPLETE — +'+cur.gold+' GOLD','#c8a840');
+    };
+    row.appendChild(doneBtn);
+    if(!sq.rerolled){
+      const rerollBtn=document.createElement('button'); rerollBtn.className='miniBtn';
+      rerollBtn.textContent='↻ ANOTHER';
+      rerollBtn.onclick=()=>{
+        const ex=(META.sqHistory||[]);
+        const next=pickSQ(sqs,META.sqDate+'_reroll',ex);
+        META.sqId=next.id;
+        META.sqRerolled=true;
+        if(!ex.includes(next.id)) META.sqHistory=[...ex,next.id].slice(-10);
+        saveMeta();
+        drawSideQuestCard();
+      };
+      row.appendChild(rerollBtn);
+    }
+    grp.appendChild(row);
+    el.appendChild(grp);
+  });
+}
 
 // ============ FORM ============
 function updateFormFields(){
@@ -3164,48 +3547,27 @@ function initNotifUI(){
   updateNotifStatus();
 }
 
-// Swipe to peek ahead on the route — snaps back on release
-let dragX0=null;
-mc.addEventListener('pointerdown',e=>{ dragX0=e.clientX; peekDrag=peek; });
-mc.addEventListener('pointermove',e=>{
-  if(dragX0===null) return;
-  const rect=mc.getBoundingClientRect();
-  const dx=(e.clientX-dragX0)*(mc.width/rect.width);
-  const LP=64*Math.max(1,mc.height/420);
-  peek=Math.max(-3*LP,Math.min(40*LP,peekDrag-dx)); // drag left = look ahead
-});
-['pointerup','pointercancel','pointerleave'].forEach(ev=>mc.addEventListener(ev,()=>{ dragX0=null; peekDrag=null; }));
-
 // ============ TAB SHELL (mobile three-view structure) ============
-// Exactly one of QUESTS / WORLD / PARTY visible at a time on mobile.
+// Exactly one of QUESTS / TOWN / PARTY visible at a time on mobile.
 // Desktop (>600px) ignores tabs entirely — CSS shows all panels.
 let currentTab='QUESTS';
 const mobileMQ=window.matchMedia('(max-width:600px)');
-function worldVisible(){ return !mobileMQ.matches||currentTab==='WORLD'; }
-let rafId=null;
-function loopIfVisible(time){
-  rafId=null;
-  if(!worldVisible()) return; // paused — switchTab restarts us
-  drawRoute(time);
-  rafId=requestAnimationFrame(loopIfVisible);
-}
-function startLoop(){ if(rafId===null&&worldVisible()) rafId=requestAnimationFrame(loopIfVisible); }
 function switchTab(tab){
   currentTab=tab;
   document.body.dataset.tab=tab;
-  ['QUESTS','WORLD','PARTY'].forEach(t=>{
-    const b=document.getElementById('tab'+t[0]+t.slice(1).toLowerCase());
+  ['QUESTS','TOWN','PARTY'].forEach(t=>{
+    const btnId = 'tab' + t[0] + t.slice(1).toLowerCase();
+    const b=document.getElementById(btnId);
     if(b) b.classList.toggle('active',t===tab);
   });
-  if(tab==='WORLD') fitMap();
-  startLoop(); // no-op when the map stays hidden
+  if(tab==='TOWN'){ fitTown(); drawTown(); }
   if(tab==='QUESTS') renderList();
   if(tab==='PARTY') updatePortraits();
 }
 mobileMQ.addEventListener('change',()=>{ switchTab(currentTab); });
 
 buildPortraitCol(); populateSelects(); drawScroll();
-fitMap(); load(); recalcDerived(); save(); refresh(); updateCheckinBtn();
+fitTown(); load(); recalcDerived(); save(); refresh(); updateCheckinBtn();
 document.getElementById('heroNameDisplay').textContent=state.name;
 updateFormFields();
 initNotifUI();

@@ -8,6 +8,7 @@ const VERSION = 'ta-v6';
 const SHELL = VERSION + '-shell';
 const FONTS = VERSION + '-fonts';
 const DATA  = 'ta-data-v1';
+const TOWN  = 'ta-town-v1';
 
 // PRECACHE is passed to cache.addAll() which is atomic — one missing or
 // renamed file silently aborts the entire SW install. Verify every entry
@@ -42,7 +43,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => !k.startsWith(VERSION) && k !== DATA).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => !k.startsWith(VERSION) && k !== DATA && k !== TOWN).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -73,6 +74,30 @@ self.addEventListener('fetch', e => {
         caches.open(DATA).then(c => c.put(e.request, copy));
         return res;
       }).catch(() => caches.open(DATA).then(c => c.match(e.request)))
+    );
+    return;
+  }
+
+  // sidequests.tsv: network-first (same pattern as presets.tsv)
+  if (url.pathname.endsWith('/sidequests.tsv')) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(DATA).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => caches.open(DATA).then(c => c.match(e.request)))
+    );
+    return;
+  }
+
+  // town/*.png: cache-first into ta-town-v1
+  if (url.pathname.match(/\/town\/[^/]+\.png$/)) {
+    e.respondWith(
+      caches.open(TOWN).then(c =>
+        c.match(e.request).then(hit =>
+          hit || fetch(e.request).then(res => { c.put(e.request, res.clone()); return res; })
+        )
+      )
     );
     return;
   }
