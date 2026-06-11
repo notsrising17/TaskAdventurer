@@ -466,10 +466,14 @@ const HP_MAX=100;
 let state={hp:HP_MAX, tasks:[], name:'HERO', captures:[0,0,0,0,0]};
 
 // Bump when the task shape changes; add a migration case in migrate()
-const SCHEMA_VERSION=1;
+const SCHEMA_VERSION=2;
 function migrate(fromVersion){
-  // switch(fromVersion){ case 1: ...mutate state.tasks...; }
   // Versions run sequentially: 1→2, 2→3, etc.
+  switch(fromVersion){
+    case 1: // v2 adds the ta_events log; nothing in ta_tasks changes
+      if(!localStorage.getItem(EVENTS_KEY)) localStorage.setItem(EVENTS_KEY,'[]');
+      break;
+  }
 }
 function load(){
   try{
@@ -630,6 +634,7 @@ function checkWeeklyReset(){
       if(habitWeekCount(t)>=(t.goal||1)){
         t.weeklyHits=(t.weeklyHits||0)+1;
         t.wkStreak=(t.wkStreak||0)+1;
+        logEvent('week',t); // weekly hit awarded here, not at goal-met toast
       } else {
         t.wkStreak=0;
       }
@@ -840,7 +845,6 @@ function toggleTask(id){
       // Goal hit this week — big reward
       if(!wasGoalMet&&habitGoalMet(t)){
         const di=t.domain||0;
-        logEvent('week',t);
         showToast('🔥 HABIT GOAL MET — '+d.cls+' ADVANCES!',d.color);
         for(let k=0;k<3;k++) setTimeout(()=>sparkleAt(unitPos[di].x,unitPos[di].y),k*200);
         const pc=document.getElementById('pc'+di);
