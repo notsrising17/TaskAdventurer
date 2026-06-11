@@ -100,6 +100,7 @@
   .dgStrip{width:100%;display:block;image-rendering:pixelated;background:rgba(7,7,16,.6);border:1px solid #2a2050;cursor:pointer;}
   .dgAdd{font-family:inherit;font-size:9px;background:rgba(255,215,0,.06);color:#9a8ad0;border:1px dashed #3a3060;padding:10px;min-height:44px;cursor:pointer;letter-spacing:1px;text-align:center;}
   .dgAdd:hover{color:var(--gold);border-color:var(--gold);}
+  .todayStrip{border-color:var(--gold);background:rgba(255,215,0,.05);}
   .task{display:flex;align-items:center;gap:5px;min-height:44px;background:rgba(12,10,32,0.85);border:1px solid #2a2050;border-left-width:3px;padding:4px 6px;font-size:9px;transition:opacity .4s;}
   .task.overdue{border-color:var(--bad)!important;box-shadow:0 0 6px rgba(238,34,34,.4);}
   .task.done{opacity:.4;}.task.done .tname{text-decoration:line-through;}
@@ -992,6 +993,7 @@ function buildQuestRow(task,onUpdate){
   cb.onclick=act(()=>toggleTask(task.id));
   a11y(cb,(recurring?'Log completion: ':'Toggle: ')+task.name);
   const name=document.createElement('div'); name.className='tname'; name.textContent=task.name;
+  attachLongPress(name,task.id);
   div.appendChild(cb); div.appendChild(name);
   const meta=document.createElement('div'); meta.className='tmeta';
   if(recurring){
@@ -1007,12 +1009,91 @@ function buildQuestRow(task,onUpdate){
   return div;
 }
 
+// ============ TODAY STRIP ============
+// A radically small "now" surface: at most 3 items, pinned above the
+// domain-grouped planning list.
+function hasChildren(t){ return state.tasks.some(c=>c.parentId===t.id); }
+function isTavern(t){ return (t.domain??0)<0; }
+function pinnedToday(){ return META.pins.date===todayStr()?META.pins.ids:[]; }
+function pinTask(id){
+  const today=todayStr();
+  if(META.pins.date!==today) META.pins={date:today,ids:[]};
+  if(!META.pins.ids.includes(id)) META.pins.ids.push(id);
+  saveMeta();
+  showToast('📌 PINNED TO TODAY');
+  renderList();
+}
+// Priority: pins, then due-today/past-due quests (nearest first), then
+// daily-capped BEHIND habits unlogged today, then any unlogged habit
+// (lowest week progress first). Tavern items and split parents excluded.
+function stripCandidates(){
+  const today=todayStr();
+  const out=[];
+  const add=t=>{ if(out.length<3&&!out.includes(t)) out.push(t); };
+  pinnedToday().forEach(id=>{
+    const t=state.tasks.find(x=>x.id===id);
+    if(t&&!isTavern(t)&&!hasChildren(t)&&!stripSatisfied(t)) add(t);
+  });
+  const pool=state.tasks.filter(t=>!isTavern(t)&&!hasChildren(t));
+  pool.filter(t=>t.type===T_QUEST&&!t.done&&t.due&&t.due<=today)
+    .sort((a,b)=>a.due.localeCompare(b.due)).forEach(add);
+  pool.filter(t=>t.type===T_HABIT&&t.dailyCap!==false&&!isDoneToday(t)&&habitAtRisk(t)).forEach(add);
+  pool.filter(t=>t.type===T_HABIT&&!isDoneToday(t)&&!habitGoalMet(t))
+    .sort((a,b)=>((a.weekCount||0)/(a.goal||1))-((b.weekCount||0)/(b.goal||1))).forEach(add);
+  return out;
+}
+// "Handled for now": done quest, anything acted on today, or moved off today
+function stripSatisfied(t){
+  if(t.type===T_QUEST) return t.done||t.lastDone===todayStr()||(t.due&&t.due>todayStr());
+  return isDoneToday(t);
+}
+let lastStripIds=[];
+function maybeCelebrateStrip(){
+  const today=todayStr();
+  if(META.celebrated===today||!lastStripIds.length) return;
+  const items=lastStripIds.map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
+  if(!items.length||!items.every(stripSatisfied)) return;
+  META.celebrated=today; saveMeta();
+  showToast('⭐ ALL ENCOUNTERS CLEARED — THE PARTY FEASTS!','#ffd700');
+  if(!REDUCED_MOTION){
+    flashT=12;
+    DOMAINS.forEach((_,i)=>setTimeout(()=>sparkleAt(unitPos[i].x,unitPos[i].y),i*120));
+  }
+}
+function buildTodayStrip(){
+  const grp=document.createElement('div'); grp.className='dgroup todayStrip';
+  const head=document.createElement('div'); head.className='dgHead';
+  const ttl=document.createElement('span'); ttl.className='dgCls'; ttl.style.color='var(--gold)';
+  ttl.textContent="⚔ TODAY'S ENCOUNTERS";
+  head.appendChild(ttl); grp.appendChild(head);
+  const cands=stripCandidates();
+  lastStripIds=cands.map(t=>t.id);
+  if(!cands.length){
+    const ok=document.createElement('div'); ok.className='empty';
+    ok.textContent='ALL CLEAR — THE PARTY RESTS';
+    grp.appendChild(ok);
+    return grp;
+  }
+  cands.forEach(t=>{
+    grp.appendChild(t.type===T_HABIT?buildHabitRow(t,DOMAINS[t.domain||0]):buildQuestRow(t));
+  });
+  return grp;
+}
+// Long-press (550ms) on a task row name pins it to today's strip
+function attachLongPress(el,id){
+  let timer=null;
+  const clear=()=>{ if(timer){ clearTimeout(timer); timer=null; } };
+  el.addEventListener('pointerdown',()=>{ timer=setTimeout(()=>{ timer=null; pinTask(id); },550); });
+  ['pointerup','pointerleave','pointercancel','pointermove'].forEach(ev=>el.addEventListener(ev,clear));
+}
+
 // QUESTS home screen: tasks grouped by domain. Each group: header row with
 // class name + status chip, destination/progress sub-line, journey strip
 // canvas, then the domain's task rows. Empty domains collapse to a header
 // with an IDLE chip and an add prompt. Overdue domains sort first.
 function renderList(){
   const el=document.getElementById('listBody'); el.innerHTML='';
+  el.appendChild(buildTodayStrip());
   const order=DOMAINS.map((_,i)=>i).sort((a,b)=>{
     const ao=domainStatus(a)==='BESIEGED',bo=domainStatus(b)==='BESIEGED';
     if(ao!==bo) return ao?-1:1;
@@ -1090,6 +1171,7 @@ function buildHabitRow(task,dom){
     top.appendChild(plus);
   }
   const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
+  attachLongPress(nm,task.id);
   const meta=document.createElement('div'); meta.className='tmeta';
   const dl=document.createElement('div'); dl.className='tloc'; dl.style.color=col;
   dl.textContent=capped?'↻ HABIT':'↻ HABIT ∞'; meta.appendChild(dl);
@@ -1185,6 +1267,7 @@ function toggleTask(id){
       // Re-arm from the due date when it's still in the future (keeps the
       // cadence), from today when overdue (no instant double-overdue)
       t.doneCount=(t.doneCount||0)+1;
+      t.lastDone=todayStr(); // lets the TODAY strip see today's completion
       logEvent('done',t);
       const base=(t.due&&t.due>=todayStr())?t.due:null;
       t.due=advanceDue(base,t.repeat);
@@ -1278,7 +1361,7 @@ function decHabit(id){
   recalcDerived();save();refresh();
 }
 function deleteTask(id){ state.tasks=state.tasks.filter(x=>x.id!==id); recalcDerived();save();refresh(); }
-function refresh(){ checkMilestones();renderStats();renderList(); }
+function refresh(){ checkMilestones();maybeCelebrateStrip();renderStats();renderList(); }
 
 // Make a clickable div keyboard-operable (the .cb checkboxes are divs)
 function a11y(el,label){
