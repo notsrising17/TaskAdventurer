@@ -503,6 +503,135 @@ r = await page.evaluate(() => {
 check('captureBar: task created in tavern', r.domain === -1, JSON.stringify(r));
 check('captureBar: input cleared after submit', r.input === '', r.input);
 
+// ---------- 12. preset parser ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); localStorage.setItem('ta_meta', JSON.stringify({welcomed:true})); });
+await page.reload();
+
+// valid TSV: 5 domains, comma name intact, correct count
+r = await page.evaluate(() => {
+  const tsv = [
+    '# comment line',
+    'domain\tgoal\tcap\tsample\tname',
+    'work\t3\tyes\tyes\tInbox to zero',
+    'health\t4\tyes\tyes\tMove your body 20 minutes',
+    'creativity\t4\tyes\tyes\tMake something for 20 minutes',
+    'home\t4\tno\tyes\tOne 10-minute tidy burst',
+    'social\t3\tno\tyes\tText someone you\'ve been meaning to',
+    'home\t2\tno\tno\tOne load of laundry, start to put-away',
+  ].join('\n');
+  const presets = parsePresetsTSV(tsv);
+  const laundry = presets.find(p => p.name === 'One load of laundry, start to put-away');
+  return {
+    count: presets.length,
+    domainNames: [...new Set(presets.map(p => p.domain))].sort(),
+    laundryName: laundry ? laundry.name : null,
+    capWork: presets.find(p=>p.domain==='work').cap,
+    sampleWork: presets.find(p=>p.domain==='work').sample,
+  };
+});
+check('presets: parser returns correct count (6 data rows)', r.count === 6, r.count);
+check('presets: comma in name preserved intact (laundry row)', r.laundryName === 'One load of laundry, start to put-away', r.laundryName);
+check('presets: all 5 domains parsed', r.domainNames.join(',') === 'creativity,health,home,social,work', r.domainNames);
+check('presets: cap and sample parsed correctly', r.capWork === true && r.sampleWork === true, JSON.stringify(r));
+
+// malformed line (4 fields) warns but doesn't kill the rest
+r = await page.evaluate(() => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  const tsv = [
+    'domain\tgoal\tcap\tsample\tname',
+    'work\t3\tyes\tyes\tGood row',
+    'work\t3\tyes\tBAD ROW ONLY FOUR FIELDS',  // missing one tab
+    'health\t4\tyes\tyes\tAlso good',
+  ].join('\n');
+  const presets = parsePresetsTSV(tsv);
+  console.warn = origWarn;
+  return { count: presets.length, warned: warns.some(w => /line 3/.test(w) || /line 4/.test(w)) };
+});
+check('presets: malformed line warns to console with line number', r.warned === true, JSON.stringify(r));
+check('presets: malformed line skipped, valid rows still parse', r.count === 2, r.count);
+
+// unknown domain warns and is skipped
+r = await page.evaluate(() => {
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  const tsv = 'domain\tgoal\tcap\tsample\tname\nunknowndomain\t3\tyes\tno\tShould skip\nwork\t2\tno\tno\tKeep me';
+  const presets = parsePresetsTSV(tsv);
+  console.warn = origWarn;
+  return { count: presets.length, warned: warns.some(w => /unknown.*domain/i.test(w) || /unknowndomain/i.test(w)) };
+});
+check('presets: unknown domain warns and is skipped', r.warned === true && r.count === 1, JSON.stringify(r));
+
+// domain mapping is by name, not index
+r = await page.evaluate(() => {
+  // Build TSV with domains in reverse order vs DOMAINS array
+  const domainNames = DOMAINS.map(d => d.name||d.cls||'').filter(Boolean);
+  const lines = ['domain\tgoal\tcap\tsample\tname'];
+  domainNames.forEach((name, i) => lines.push(`${name}\t${i+1}\tno\tno\tTest ${name}`));
+  const presets = parsePresetsTSV(lines.join('\n'));
+  return presets.every(p => {
+    const expectedIdx = DOMAINS.findIndex(d => (d.name||d.cls||'').toLowerCase() === p.domain);
+    return p.domainIdx === expectedIdx;
+  });
+});
+check('presets: domain mapped by name not index', r === true, r);
+
+// ---------- 13. preset fallback (offline) ----------
+r = await page.evaluate(() => {
+  // Simulate fetch failure by temporarily breaking loadPresets
+  _presetsCache = null; _presetsLoading = null;
+  const origFetch = window.fetch;
+  window.fetch = () => Promise.reject(new Error('offline'));
+  return loadPresets().then(presets => {
+    window.fetch = origFetch;
+    _presetsCache = null; _presetsLoading = null;
+    const domains = [...new Set(presets.map(p => p.domain))];
+    const allSample = presets.every(p => p.sample);
+    return { count: presets.length, domains: domains.length, allSample };
+  });
+});
+check('presets: fallback returns one preset per domain (5)', r.count === 5 && r.domains === 5, JSON.stringify(r));
+check('presets: fallback presets are all sample:yes', r.allSample === true, r.allSample);
+
+// ---------- 14. sample campaign uses TSV sample:yes rows ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+await page.evaluate(() => welcomeSeed());
+r = await page.evaluate(() => {
+  const habits = state.tasks.filter(t => t.type === 1);  // T_HABIT === 1
+  const habitDomains = [...new Set(habits.map(t => t.domain))];
+  const allHaveGoal = habits.every(t => t.goal > 0);
+  const allHaveCap = habits.every(t => typeof t.dailyCap === 'boolean');
+  return { habitCount: habits.length, habitDomains: habitDomains.length, allHaveGoal, allHaveCap };
+});
+check('presets: sample campaign seeds habits from TSV (≥5)', r.habitCount >= 5, r.habitCount);
+check('presets: sample habits span all 5 domains', r.habitDomains === 5, r.habitDomains);
+check('presets: sample habits have goal and dailyCap from TSV', r.allHaveGoal && r.allHaveCap, JSON.stringify(r));
+
+// with fetch blocked, fallback still seeds one habit per domain
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+await page.evaluate(() => {
+  _presetsCache = null; _presetsLoading = null;
+  const origFetch = window.fetch;
+  window.fetch = (url, ...args) => {
+    if (typeof url === 'string' && url.includes('presets.tsv')) return Promise.reject(new Error('blocked'));
+    return origFetch(url, ...args);
+  };
+});
+await page.evaluate(() => welcomeSeed());
+r = await page.evaluate(() => {
+  const habits = state.tasks.filter(t => t.type === 1);
+  const habitDomains = [...new Set(habits.map(t => t.domain))];
+  return { habitCount: habits.length, habitDomains: habitDomains.length };
+});
+check('presets: offline fallback seeds ≥1 habit per domain (5 domains)', r.habitDomains === 5, JSON.stringify(r));
+
 // ---------- wrap up ----------
 check('zero page errors across all scenarios', errors.length === 0, errors.join(' | '));
 await browser.close();
