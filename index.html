@@ -242,6 +242,14 @@
     <div class="barwrap"><div class="bar" id="hpBar"></div></div>
     <div id="domainBars"></div>
     <button id="checkinBtn" onclick="showCheckin()">📋 DAILY REPORT</button>
+    <div style="display:flex;gap:4px;align-items:center;">
+      <button class="miniBtn" id="notifBtn" onclick="toggleNotifSettings()">🔔 ALERTS</button>
+      <span id="notifStatus" style="font-size:5px;color:#888;letter-spacing:1px;"></span>
+    </div>
+    <div id="notifRow" style="display:none;gap:4px;align-items:center;flex-wrap:wrap;padding:4px 0;">
+      <span style="font-size:5px;color:#888;letter-spacing:1px;">DAILY REPORT REMINDER</span>
+      <input type="time" id="notifTime" value="20:00" style="font-family:inherit;font-size:6px;background:#1a1428;color:var(--gold);border:1px solid #4a3060;padding:3px 5px;letter-spacing:1px;" onchange="saveNotifPref()">
+    </div>
     <div style="display:flex;gap:4px;">
       <button class="miniBtn" id="exportBtn">💾 EXPORT SAVE</button>
       <button class="miniBtn" id="importBtn">📂 IMPORT</button>
@@ -1830,6 +1838,90 @@ function submitCheckin(){
   if(streak>1) showToast('📋 REPORT FILED — '+streak+' DAY STREAK 🔥','#44cc44');
 }
 
+// ============ NOTIFICATIONS ============
+const NOTIF_KEY='ta_notif'; // 'granted'|'denied'|''
+const NOTIF_TIME_KEY='ta_notif_time'; // "HH:MM"
+let _lastDailyNotifDate=''; // prevent double-fire same day
+let _lastOverdueNotifDate=''; // prevent spam
+
+function notifEnabled(){ return Notification&&Notification.permission==='granted'&&localStorage.getItem(NOTIF_KEY)==='granted'; }
+
+function updateNotifStatus(){
+  const el=document.getElementById('notifStatus'); if(!el) return;
+  if(!('Notification' in window)){ el.textContent='NOT SUPPORTED'; return; }
+  const p=Notification.permission;
+  if(p==='granted'&&localStorage.getItem(NOTIF_KEY)==='granted') el.textContent='ON';
+  else if(p==='denied') el.textContent='BLOCKED IN BROWSER';
+  else el.textContent='OFF';
+}
+
+function toggleNotifSettings(){
+  const row=document.getElementById('notifRow'); if(!row) return;
+  const showing=row.style.display==='flex';
+  if(showing){ row.style.display='none'; return; }
+  row.style.display='flex';
+  // First time: request permission
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted') localStorage.setItem(NOTIF_KEY,'granted');
+      updateNotifStatus();
+    });
+  } else if('Notification' in window && Notification.permission==='granted'){
+    localStorage.setItem(NOTIF_KEY,'granted');
+    updateNotifStatus();
+  }
+}
+
+function saveNotifPref(){
+  const t=document.getElementById('notifTime'); if(!t) return;
+  localStorage.setItem(NOTIF_TIME_KEY,t.value);
+}
+
+function sendNotif(title,body,tag){
+  if(!notifEnabled()) return;
+  try{
+    new Notification(title,{body,icon:'./icon-192.png',badge:'./icon-192.png',tag,renotify:true});
+  }catch(e){}
+}
+
+function countOverdueTasks(){
+  const today=todayStr();
+  return state.tasks.filter(t=>!t.done&&t.type===T_QUEST&&t.due&&t.due<today).length;
+}
+
+function checkScheduledNotifs(){
+  if(!notifEnabled()) return;
+  const now=new Date();
+  const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  const target=localStorage.getItem(NOTIF_TIME_KEY)||'20:00';
+  const today=todayStr();
+
+  // Daily report reminder — fires once in the target minute if not yet reported
+  if(hhmm===target&&_lastDailyNotifDate!==today){
+    _lastDailyNotifDate=today;
+    if(!checkinDone()){
+      const streak=checkinStreak();
+      const body=streak>0?'Keep your '+streak+'-day streak alive — file today\'s report!':'Log your progress and keep the party moving.';
+      sendNotif('📋 Daily Report Due',body,'ta-daily');
+    }
+  }
+
+  // Overdue alert — fires once per day on wake/hourly check if there are overdue quests
+  if(_lastOverdueNotifDate!==today){
+    const n=countOverdueTasks();
+    if(n>0){
+      _lastOverdueNotifDate=today;
+      sendNotif('⚠ Overdue Quests',n+' quest'+(n===1?' is':' are')+' overdue — snooze or complete them to restore HP.','ta-overdue');
+    }
+  }
+}
+
+function initNotifUI(){
+  const timeEl=document.getElementById('notifTime');
+  if(timeEl) timeEl.value=localStorage.getItem(NOTIF_TIME_KEY)||'20:00';
+  updateNotifStatus();
+}
+
 // Canvas tap → open focus for nearest unit
 mc.addEventListener('click',e=>{
   const rect=mc.getBoundingClientRect();
@@ -1860,13 +1952,16 @@ fitMap(); load(); recalcHP(); save(); refresh(); updateCheckinBtn();
 visSteps=DOMAINS.map((_,i)=>domainCurrentStep(i));
 document.getElementById('heroNameDisplay').textContent=state.name;
 updateFormFields();
+initNotifUI();
+// Check overdue alerts on launch (daily report reminder fires at the scheduled minute)
+setTimeout(checkScheduledNotifs,2000);
 document.getElementById('exportBtn').onclick=exportData;
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change',e=>{ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
 // Recalc when the tab wakes up — catches overnight date/week rollovers in long-lived tabs
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ recalcHP(); save(); refresh(); updateCheckinBtn(); } });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ recalcHP(); save(); refresh(); updateCheckinBtn(); checkScheduledNotifs(); } });
 requestAnimationFrame(loop);
-setInterval(()=>{ recalcHP(); save(); refresh(); },3600*1000);
+setInterval(()=>{ recalcHP(); save(); refresh(); checkScheduledNotifs(); },60*1000); // check every minute for notification timing
 // PWA: offline support + home-screen install; also requests persistent
 // storage so iOS/Android don't evict localStorage after 7 days idle
 if('serviceWorker' in navigator){
