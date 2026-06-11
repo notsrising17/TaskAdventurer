@@ -82,12 +82,41 @@
   #gameover h1{font-size:18px;color:var(--hp-red);}
   #gameover p{font-size:8px;line-height:1.8;color:#ffcccc;}
   #reviveBtn{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;cursor:pointer;}
-  @media(max-width:480px){
-    #portraitPanel{width:118px;}#portraitImg{width:106px;height:140px;}
-    #statsPanel{width:155px;padding:8px;gap:8px;}
-    #formPanel{width:98%;gap:4px;padding:6px;}
-    #taskName,#taskLoc,#taskCat,#taskRecur{flex:1 1 45%;}
-    #taskDate{flex:1 1 auto;}#addBtn{flex:1 1 100%;}
+  @media(max-width:600px){
+    /* Compact portrait */
+    #portraitPanel{width:86px;padding:4px;}
+    #portraitImg{width:76px;height:100px;}
+    .nameplate{font-size:5px;margin-top:3px;}
+
+    /* Compact stats */
+    #statsPanel{width:calc(100% - 106px);right:0;top:0;padding:8px 10px;gap:6px;
+      border-top:none;border-right:none;border-radius:0;}
+    .stat-name{font-size:8px;}
+    .stat-label{font-size:5px;}
+    #heroNameInput{font-size:8px;}
+
+    /* Form: full-width, stacked rows, big touch targets */
+    #formPanel{
+      left:0;right:0;bottom:calc(40vh + 10px);
+      transform:none;width:100%;max-width:none;
+      border-left:none;border-right:none;
+      padding:8px 10px;flex-direction:column;gap:6px;
+    }
+    #formPanel.collapsed{bottom:48px;}
+    #formPanel input,#formPanel select{height:44px;font-size:9px;padding:0 8px;}
+    #taskName{flex:1 1 100%;}
+    #taskLoc,#taskCat,#taskRecur{flex:1 1 30%;min-width:0;}
+    #taskDate{flex:1 1 auto;}
+    #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
+
+    /* Bigger touch targets in task list */
+    .task{min-height:48px;padding:6px 8px;}
+    .cb{width:26px;height:26px;flex:0 0 26px;}
+    .del{padding:10px 12px;font-size:10px;}
+    .tname{font-size:8px;}
+    #listHead{padding:10px 12px;}
+    #listHead .lbl{font-size:8px;}
+    #collapseBtn{width:32px;height:28px;font-size:12px;}
   }
 </style>
 </head>
@@ -144,19 +173,6 @@
 <script>
 const PORTRAIT_SRCS = ['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'];
 const spriteImg = new Image();
-let processedSprite = null;
-spriteImg.onload = () => {
-  const oc = document.createElement('canvas');
-  oc.width = spriteImg.naturalWidth; oc.height = spriteImg.naturalHeight;
-  const ox = oc.getContext('2d');
-  ox.drawImage(spriteImg, 0, 0);
-  const d = ox.getImageData(0, 0, oc.width, oc.height);
-  for(let i=0; i<d.data.length; i+=4){
-    if(d.data[i]>210 && d.data[i+1]>210 && d.data[i+2]>210) d.data[i+3]=0;
-  }
-  ox.putImageData(d, 0, 0);
-  processedSprite = oc;
-};
 spriteImg.src = 'wizard_sprite_16bit.png';
 function updatePortrait(){ document.getElementById('portraitImg').src = PORTRAIT_SRCS[hpLevel()]; }
 
@@ -481,8 +497,8 @@ function drawMap(time){
   mx.beginPath(); mx.arc(hx,bobY+5,12+pulse*4,0,7); mx.stroke();
   mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,bobY+7,9,4,0,0,7); mx.fill();
   mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
-  if(processedSprite){
-    mx.drawImage(processedSprite,hx-14,bobY-18,28,32);
+  if(spriteImg.complete && spriteImg.naturalWidth>0){
+    mx.drawImage(spriteImg,hx-14,bobY-18,28,32);
   } else {
     mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,bobY-14); mx.lineTo(hx+14,bobY); mx.lineTo(hx,bobY+14); mx.lineTo(hx-14,bobY); mx.closePath(); mx.fill();
   }
