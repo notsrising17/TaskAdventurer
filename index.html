@@ -513,6 +513,10 @@ function localDateStr(d){
 }
 function todayStr(){ return localDateStr(new Date()); }
 function mondayStr(){ const d=new Date(),day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1)); return localDateStr(d); }
+// Monday of the week N weeks away from this one (negative = past)
+function mondayStrOffset(weeks){ const d=new Date(mondayStr()+'T12:00:00'); d.setDate(d.getDate()+weeks*7); return localDateStr(d); }
+// Whole local days from today to a date string (negative = past)
+function dayDiff(dateStr){ return Math.round((new Date(dateStr+'T00:00:00')-new Date(todayStr()+'T00:00:00'))/86400000); }
 function isDoneToday(t){ return t.lastDone===todayStr(); }
 
 // ============ STATE ============
@@ -521,8 +525,30 @@ function isDoneToday(t){ return t.lastDone===todayStr(); }
 const ART_COLOR=['#44cc44','#ffcc00','#ee2222','#ee2222'];
 let state={tasks:[], name:'HERO', milestones:[0,0,0,0,0]};
 
+// Adherence-mechanic state (Phase 1.5), persisted under its own key.
+// tokens: campfire tokens (streak repair, cap 2). pins: today-only TODAY-strip
+// pins. lastSeen + camped: re-entry ritual bookkeeping. critMiss/critBonus:
+// crit fairness counter + per-domain bonus milestone progress. msBase:
+// milestones held when v4 migrated (those domains keep full-price milestones).
+// offers: pending campfire-token streak-repair offers. celebrated: last date
+// the TODAY-strip clear celebration fired.
+const META_KEY='ta_meta';
+function metaDefaults(){
+  return {tokens:0,pins:{date:'',ids:[]},lastSeen:null,camped:false,
+    critMiss:0,critBonus:[0,0,0,0,0],msBase:[0,0,0,0,0],msInit:false,
+    offers:[],celebrated:''};
+}
+let META=metaDefaults();
+function loadMeta(){
+  try{
+    const m=JSON.parse(localStorage.getItem(META_KEY)||'null');
+    if(m&&typeof m==='object') META=Object.assign(metaDefaults(),m);
+  }catch(e){ META=metaDefaults(); }
+}
+function saveMeta(){ try{ localStorage.setItem(META_KEY,JSON.stringify(META)); }catch(e){} }
+
 // Bump when the task shape changes; add a migration case in migrate()
-const SCHEMA_VERSION=3;
+const SCHEMA_VERSION=4;
 function migrate(fromVersion){
   // Versions run sequentially: 1→2, 2→3, etc. Each case must be idempotent.
   switch(fromVersion){
@@ -543,9 +569,29 @@ function migrate(fromVersion){
         }
       });
       break;
+    case 3: // v4 adds adherence fields: weekLog, snoozeCount, milestone base
+      state.tasks.forEach(t=>{
+        if(t.snoozeCount==null) t.snoozeCount=0;
+        if(t.type===T_HABIT&&t.weekLog==null){
+          // Synthesize history from the old consecutive streak: seed the
+          // last wkStreak weeks as hits so the rolling window starts honest
+          t.weekLog=[];
+          const n=Math.min(t.wkStreak||0,26);
+          for(let k=n;k>=1;k--) t.weekLog.push({w:mondayStrOffset(-k),hit:1});
+        }
+      });
+      // Domains already holding milestones keep paying full price —
+      // the cheap early-milestone ramp is for fresh domains only
+      if(!META.msInit){
+        META.msBase=DOMAINS.map((_,i)=>(state.milestones&&state.milestones[i])||0);
+        META.msInit=true;
+        saveMeta();
+      }
+      break;
   }
 }
 function load(){
+  loadMeta();
   try{
     const t=JSON.parse(localStorage.getItem('ta_tasks')||'[]'); if(Array.isArray(t)) state.tasks=t;
     state.name=(localStorage.getItem('ta_name')||'HERO').toUpperCase();
@@ -563,6 +609,7 @@ function save(){
     localStorage.setItem('ta_tasks',JSON.stringify(state.tasks));
     localStorage.setItem('ta_name',state.name);
     localStorage.setItem('ta_milestones',JSON.stringify(state.milestones));
+    saveMeta();
   }catch(e){ showToast('⚠ SAVE FAILED — EXPORT YOUR DATA','#ee2222'); }
 }
 
@@ -1233,7 +1280,7 @@ function a11y(el,label){
 // Everything lives in localStorage, which browsers can evict — give the
 // player a real save file
 function exportData(){
-  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,milestones:state.milestones,checkin:loadCheckinDates(),events:state.events,eventSums:state.eventSums};
+  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,milestones:state.milestones,checkin:loadCheckinDates(),events:state.events,eventSums:state.eventSums,meta:META};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1249,11 +1296,15 @@ function importData(file){
       const p=JSON.parse(r.result);
       if(!Array.isArray(p.tasks)) throw new Error('bad file');
       state.tasks=p.tasks;
-      let v=parseInt(p.version)||1;
-      while(v<SCHEMA_VERSION){ migrate(v); v++; }
       state.name=((p.name||'HERO')+'').toUpperCase().slice(0,12);
       const ms=p.milestones||p.captures; // old exports used 'captures'
       state.milestones=DOMAINS.map((_,i)=>(ms&&ms[i])||0);
+      // Meta rides with the save; old payloads get defaults, then the
+      // migration recomputes msBase from the imported milestones
+      META=p.meta&&typeof p.meta==='object'?Object.assign(metaDefaults(),p.meta):metaDefaults();
+      let v=parseInt(p.version)||1;
+      if(v<4) META.msInit=false;
+      while(v<SCHEMA_VERSION){ migrate(v); v++; }
       if(p.checkin){
         const dates=Array.isArray(p.checkin)?p.checkin:[p.checkin];
         saveCheckinDates(dates);
