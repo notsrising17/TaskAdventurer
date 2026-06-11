@@ -87,6 +87,7 @@
   #fgType{flex:0 1 90px;}
   #fgGoal{flex:0 0 70px;}
   #fgDate{flex:0 0 auto;}
+  #fgRepeat{flex:0 0 90px;}
   #formPanel input::-webkit-calendar-picker-indicator{filter:invert(.8);}
   #addBtn{font-family:inherit;font-size:8px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:8px;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
   #addBtn:active{transform:translateY(2px);border-bottom-width:1px;}
@@ -205,7 +206,7 @@
     .stat-name{font-size:8px;}
     #formPanel input,#formPanel select{height:44px;font-size:9px;padding:0 8px;}
     .fgroup{flex:1 1 100%;}
-    #fgGoal,#fgDate{flex:1 1 auto;}
+    #fgGoal,#fgDate,#fgRepeat{flex:1 1 auto;}
     #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
     .task{min-height:48px;padding:6px 8px;}.cb{width:26px;height:26px;flex:0 0 26px;}
     .del{padding:10px 12px;font-size:10px;}
@@ -271,6 +272,8 @@
       <input type="number" id="taskGoal" placeholder="GOAL #" min="1" max="99"></div>
     <div class="fgroup" id="fgDate"><label class="flabel" for="taskDate">DUE DATE (OPTIONAL)</label>
       <input type="date" id="taskDate"></div>
+    <div class="fgroup" id="fgRepeat"><label class="flabel" for="taskRepeat">REPEAT EVERY N DAYS (OPTIONAL)</label>
+      <input type="number" id="taskRepeat" placeholder="E.G. 7" min="1" max="365"></div>
     <button id="addBtn">+ ADD</button>
   </div>
   <div id="listBody"></div>
@@ -313,6 +316,8 @@
       <input type="number" id="editGoal" min="1" max="99"></div>
     <div class="fgroup" id="editDateGrp"><label class="flabel" for="editDate">DUE DATE (OPTIONAL)</label>
       <input type="date" id="editDate"></div>
+    <div class="fgroup" id="editRepeatGrp"><label class="flabel" for="editRepeat">REPEAT EVERY N DAYS (0 = OFF)</label>
+      <input type="number" id="editRepeat" min="0" max="365"></div>
     <div style="display:flex;gap:6px;">
       <button id="editSave" onclick="saveEdit()">✓ SAVE</button>
       <button id="editCancel" onclick="closeEdit()">CANCEL</button>
@@ -507,7 +512,7 @@ function countDomainSteps(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
   let s=0;
   tasks.forEach(t=>{
-    if(t.type===T_QUEST) s+=t.done?1:0;
+    if(t.type===T_QUEST) s+=t.repeat>0?(t.doneCount||0):(t.done?1:0);
     else if(t.type===T_HABIT) s+=habitGoalHits(t);
     else if(t.type===T_TARGET) s+=Math.floor((t.count||0)/(t.goal||1));
   });
@@ -674,11 +679,13 @@ function renderList(){
     }
     const div=document.createElement('div');
     div.className='task domain-'+(task.domain||0)+(over?' overdue':'')+(task.done?' done':'');
+    const recurring=task.type===T_QUEST&&task.repeat>0;
     const cb=document.createElement('div');
     if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; cb.title='Log one completion'; }
+    else if(recurring){ cb.className='cb'; cb.textContent='↻'; cb.title='Complete (repeats every '+task.repeat+'d)'; }
     else{ cb.className='cb'+(task.done?' checked':''); }
     cb.onclick=()=>toggleTask(task.id);
-    a11y(cb,(task.type===T_TARGET?'Log completion: ':'Toggle: ')+task.name);
+    a11y(cb,(task.type===T_TARGET||recurring?'Log completion: ':'Toggle: ')+task.name);
     const name=document.createElement('div'); name.className='tname'; name.textContent=task.name;
     div.appendChild(cb); div.appendChild(name);
     const meta=document.createElement('div'); meta.className='tmeta';
@@ -686,11 +693,16 @@ function renderList(){
     if(task.type===T_TARGET){
       const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl);
     }
+    if(recurring){
+      const tl=document.createElement('div'); tl.className='ttype';
+      tl.textContent='↻ '+task.repeat+'D'+((task.doneCount||0)>0?' ×'+task.doneCount:''); meta.appendChild(tl);
+    }
     div.appendChild(meta);
     if(task.type===T_QUEST&&task.due){ const badge=document.createElement('div'); badge.className=over?'badge over':'badge due'; badge.textContent=over?'OVERDUE':fmtDue(task.due); div.appendChild(badge); }
     if(over){ const sn=document.createElement('button'); sn.className='del'; sn.style.color='#ffcc66'; sn.style.borderColor='#8a6a20'; sn.style.background='#1a1408'; sn.textContent='+1D'; sn.title='Snooze: move due date to tomorrow'; sn.onclick=()=>snoozeTask(task.id); div.appendChild(sn); }
     if(task.type===T_TARGET){ const badge=document.createElement('div'); const pct=Math.min(100,Math.round(((task.count||0)/(task.goal||1))*100)); badge.className='badge due'; badge.style.color=hpColor(pct); badge.style.borderColor=hpColor(pct); badge.textContent=pct+'%'; div.appendChild(badge); }
     if(task.type===T_TARGET&&(task.count||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo one completion'; minus.onclick=()=>decTarget(task.id); div.appendChild(minus); }
+    if(recurring&&(task.doneCount||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo last completion'; minus.onclick=()=>decRecurring(task.id); div.appendChild(minus); }
     div.appendChild(editBtn(task.id));
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(task.id); div.appendChild(del);
     el.appendChild(div);
@@ -748,10 +760,11 @@ function buildHabitRow(task,dom){
 }
 
 // ============ ACTIONS ============
-function addTask(name,domain,type,goal,due){
+function addTask(name,domain,type,goal,due,repeat){
   const di=parseInt(domain)||0, ti=parseInt(type)||0;
   const g=parseInt(goal)||1;
-  const base={id:Date.now()+Math.random(),name,domain:di,type:ti,goal:g,weekStart:mondayStr(),due:due||null,done:false};
+  const rep=ti===T_QUEST?Math.max(0,parseInt(repeat)||0):0;
+  const base={id:Date.now()+Math.random(),name,domain:di,type:ti,goal:g,weekStart:mondayStr(),due:due||null,done:false,repeat:rep,doneCount:0};
   const extra=ti===T_HABIT?{weekCount:0,weeklyHits:0,wkStreak:0,lastDone:null}:{count:0,streak:0,lastDone:null};
   state.tasks.push(Object.assign(base,extra));
   recalcHP();save();refresh();
@@ -794,7 +807,17 @@ function toggleTask(id){
     t.count=(t.count||0)+1;
     if(t.count>=t.goal) sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
   } else {
-    if(!t.done){ t.done=true; sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
+    if(t.repeat>0){
+      // Recurring quest: bank the completion and re-arm the due date.
+      // Re-arm from the due date when it's still in the future (keeps the
+      // cadence), from today when overdue (no instant double-overdue)
+      t.doneCount=(t.doneCount||0)+1;
+      const base=(t.due&&t.due>=todayStr())?t.due:null;
+      t.due=advanceDue(base,t.repeat);
+      sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
+      showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due).toUpperCase().replace('DUE ','')+'!',d.color);
+    }
+    else if(!t.done){ t.done=true; sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
     else t.done=false;
   }
   recalcHP();save();refresh();
@@ -817,6 +840,8 @@ function openEdit(id){
   document.getElementById('editGoal').value=t.goal||1;
   document.getElementById('editDateGrp').style.display=t.type===T_QUEST?'':'none';
   document.getElementById('editDate').value=t.due||'';
+  document.getElementById('editRepeatGrp').style.display=t.type===T_QUEST?'':'none';
+  document.getElementById('editRepeat').value=t.repeat||0;
   document.getElementById('editWrap').classList.add('open');
   document.getElementById('editName').focus();
 }
@@ -830,6 +855,11 @@ function saveEdit(){
     if(g>=1&&g<=99) t.goal=g;
   } else {
     t.due=document.getElementById('editDate').value||null;
+    const r=parseInt(document.getElementById('editRepeat').value);
+    if(!isNaN(r)&&r>=0&&r<=365){
+      if(r>0&&!(t.repeat>0)) t.doneCount=t.doneCount||0; // turning recurrence on
+      t.repeat=r;
+    }
   }
   closeEdit();
   recalcHP();save();refresh();
@@ -841,7 +871,7 @@ function editBtn(id){
   b.title='Edit task'; b.onclick=()=>openEdit(id);
   return b;
 }
-['editName','editGoal','editDate'].forEach(eid=>{
+['editName','editGoal','editDate','editRepeat'].forEach(eid=>{
   document.getElementById(eid).addEventListener('keydown',e=>{
     if(e.key==='Enter') saveEdit();
     else if(e.key==='Escape') closeEdit();
@@ -854,6 +884,14 @@ function snoozeTask(id){
   t.due=advanceDue(null,1);
   recalcHP();save();refresh();
   showToast('⏰ SNOOZED TO TOMORROW — '+t.name.toUpperCase().slice(0,24));
+}
+// Undo a recurring-quest completion: take back the banked step and
+// pull the due date back one cycle
+function decRecurring(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t||!(t.repeat>0)||!(t.doneCount>0)) return;
+  t.doneCount--;
+  if(t.due) t.due=advanceDue(t.due,-t.repeat);
+  recalcHP();save();refresh();
 }
 function decTarget(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||t.type!==T_TARGET) return;
@@ -1549,6 +1587,7 @@ function updateFormFields(){
   document.getElementById('fgGoalLabel').textContent=type===T_HABIT?'TIMES / WEEK':'GOAL / WK';
   document.getElementById('taskGoal').placeholder=type===T_HABIT?'DAYS / WK':'GOAL #';
   document.getElementById('fgDate').style.display=type===T_QUEST?'':'none';
+  document.getElementById('fgRepeat').style.display=type===T_QUEST?'':'none';
 }
 document.getElementById('taskType').addEventListener('change',updateFormFields);
 
@@ -1563,9 +1602,10 @@ document.getElementById('addBtn').onclick=()=>{
   const type=document.getElementById('taskType').value;
   const goal=document.getElementById('taskGoal').value||1;
   const due=document.getElementById('taskDate').value;
+  const repeat=document.getElementById('taskRepeat').value;
   if(!name) return;
-  addTask(name,domain,type,goal,due||null);
-  document.getElementById('taskName').value=''; document.getElementById('taskDate').value=''; document.getElementById('taskGoal').value='';
+  addTask(name,domain,type,goal,due||null,repeat);
+  document.getElementById('taskName').value=''; document.getElementById('taskDate').value=''; document.getElementById('taskGoal').value=''; document.getElementById('taskRepeat').value='';
   toggleForm();
 };
 document.getElementById('taskName').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addBtn').click(); });
@@ -1679,17 +1719,21 @@ function renderFocusPanel(){
       body.appendChild(row); return;
     }
     const over=isOverdue(task);
+    const recurring=task.type===T_QUEST&&task.repeat>0;
     const div=document.createElement('div');
     div.className='task domain-'+focusIdx+(over?' overdue':'')+(task.done?' done':'');
     const cb=document.createElement('div');
     if(task.type===T_TARGET){ cb.className='cb'; cb.textContent='+'; }
+    else if(recurring){ cb.className='cb'; cb.textContent='↻'; }
     else { cb.className='cb'+(task.done?' checked':''); }
     cb.onclick=()=>{ toggleTask(task.id); renderFocusPanel(); };
-    a11y(cb,(task.type===T_TARGET?'Log completion: ':'Toggle: ')+task.name);
+    a11y(cb,(task.type===T_TARGET||recurring?'Log completion: ':'Toggle: ')+task.name);
     const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
     const meta=document.createElement('div'); meta.className='tmeta';
     if(task.type===T_TARGET){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent=(task.count||0)+'/'+(task.goal||1)+' WK'; meta.appendChild(tl); }
+    if(recurring){ const tl=document.createElement('div'); tl.className='ttype'; tl.textContent='↻ '+task.repeat+'D'+((task.doneCount||0)>0?' ×'+task.doneCount:''); meta.appendChild(tl); }
     if(task.type===T_TARGET&&(task.count||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo one completion'; minus.onclick=()=>{ decTarget(task.id); renderFocusPanel(); }; div.appendChild(minus); }
+    if(recurring&&(task.doneCount||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo last completion'; minus.onclick=()=>{ decRecurring(task.id); renderFocusPanel(); }; div.appendChild(minus); }
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>{ deleteTask(task.id); renderFocusPanel(); };
     div.appendChild(cb); div.appendChild(nm); div.appendChild(meta); div.appendChild(editBtn(task.id)); div.appendChild(del);
     body.appendChild(div);
