@@ -127,6 +127,14 @@
   #focusAddBtn{font-family:inherit;font-size:9px;background:rgba(255,215,0,.1);color:var(--gold);
     border:1px solid #4a3060;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;text-align:center;flex:0 0 auto;}
 
+  /* Re-entry ritual — MAKE CAMP */
+  #campWrap{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:50;display:none;align-items:center;justify-content:center;padding:16px;}
+  #campWrap.open{display:flex;}
+  #campBox{width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px;padding:18px;}
+  .camp-body{font-size:9px;color:var(--text);line-height:1.9;text-align:center;letter-spacing:1px;}
+  #campReplan{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:14px;min-height:48px;cursor:pointer;letter-spacing:1px;}
+  #campDismiss{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;}
+
   /* Check-in */
   #checkinWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:40;display:none;align-items:center;justify-content:center;padding:16px;}
   #checkinWrap.open{display:flex;}
@@ -326,6 +334,15 @@
   <canvas id="focusPath" height="76"></canvas>
   <div id="focusBody"></div>
   <button id="focusAddBtn" onclick="focusAddTask()">+ ADD TASK TO THIS DOMAIN</button>
+</div>
+
+<div id="campWrap">
+  <div id="campBox" class="glass">
+    <div class="ck-title">MAKE CAMP</div>
+    <div class="camp-body">THE PARTY GATHERS BY THE FIRE.<br><br>EVERY CAMPAIGN PAUSES TO REGROUP — THE MAPS COME OUT, THE ROUTES ARE REDRAWN, AND THE MARCH RESUMES STRONGER.</div>
+    <button id="campReplan" onclick="replanCampaign()">⚑ REPLAN THE CAMPAIGN</button>
+    <button id="campDismiss" onclick="closeCamp()">I'LL SORT IT MYSELF</button>
+  </div>
 </div>
 
 <div id="checkinWrap">
@@ -1337,12 +1354,47 @@ function editBtn(id){
   });
 });
 
-// Snooze a single overdue quest to tomorrow (Rally does this globally)
+// Snooze a single overdue quest to tomorrow
 function snoozeTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t||!isOverdue(t)) return;
   t.due=advanceDue(null,1);
+  t.snoozeCount=(t.snoozeCount||0)+1; // feeds the boss-fight split prompt
   recalcDerived();save();refresh();
   showToast('⏰ SNOOZED TO TOMORROW — '+t.name.toUpperCase().slice(0,24));
+}
+
+// ============ RE-ENTRY RITUAL (MAKE CAMP) ============
+// Returning after ≥5 days away with past-due quests gets a regroup ritual,
+// not a wall of red. Never two opens in a row; the gap is never mentioned
+// again or logged anywhere.
+function pastDueQuests(){
+  return state.tasks.filter(t=>!isTavern(t)&&isOverdue(t))
+    .sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+}
+function bootRitual(){
+  const today=todayStr();
+  const prev=META.lastSeen;
+  const gap=prev?dayDiff(prev)*-1:0; // prev is in the past → positive gap
+  const show=gap>=5&&pastDueQuests().length>0&&!META.camped;
+  META.camped=show; // cooldown: cleared on any open where it didn't show
+  META.lastSeen=today;
+  saveMeta();
+  if(show) document.getElementById('campWrap').classList.add('open');
+}
+function closeCamp(){ document.getElementById('campWrap').classList.remove('open'); }
+// Bulk-reschedule every past-due quest across the remaining days of this
+// week, round-robin so no single day takes the whole load
+function replanCampaign(){
+  const quests=pastDueQuests();
+  const days=daysLeftInWeek(); // includes today
+  quests.forEach((t,i)=>{
+    t.due=advanceDue(null,i%days);
+    t.snoozeCount=(t.snoozeCount||0)+0.5; // half weight — not task-specific avoidance
+  });
+  closeCamp();
+  recalcDerived();save();refresh();
+  if(mobileMQ.matches) switchTab('QUESTS');
+  showToast('⚑ THE PARTY MARCHES AGAIN','#44cc44');
 }
 // Undo a recurring-quest completion: take back the banked step and
 // pull the due date back one cycle
@@ -2412,6 +2464,7 @@ document.getElementById('heroNameDisplay').textContent=state.name;
 updateFormFields();
 initNotifUI();
 switchTab('QUESTS');
+bootRitual(); // re-entry ritual decides before the user sees the list
 // Check overdue alerts on launch (daily report reminder fires at the scheduled minute)
 setTimeout(checkScheduledNotifs,2000);
 document.getElementById('exportBtn').onclick=exportData;
