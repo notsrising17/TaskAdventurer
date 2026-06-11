@@ -531,7 +531,14 @@ const mc=document.getElementById('mapCanvas');
 const mx=mc.getContext('2d');
 const TS=20,COLS=13,ROWS=20;
 let MAP=buildMap();
-let unitPos=DOMAINS.map(()=>({x:6*TS+TS/2,y:10*TS+TS/2}));
+// Start units spread slightly from center toward their first waypoint so they're visible
+const CENTER_X=6*TS+TS/2, CENTER_Y=10*TS+TS/2;
+let unitPos=DOMAINS.map(d=>{
+  const w1=d.path[1]||d.path[0];
+  const tx=w1[0]*TS+TS/2, ty=w1[1]*TS+TS/2;
+  const dx=tx-CENTER_X,dy=ty-CENTER_Y,len=Math.sqrt(dx*dx+dy*dy)||1;
+  return {x:CENTER_X+dx/len*TS*0.6, y:CENTER_Y+dy/len*TS*0.6};
+});
 const UNIT_SPEED=0.35;
 let sparkles=[];
 let mapScale=1,mapOX=0,mapOY=0;
@@ -911,8 +918,20 @@ function drawMap(time){
   sparkles.forEach(s=>{ s.t+=0.05; const r=s.t*24,a=1-s.t; if(a>0){mx.fillStyle='rgba(255,255,180,'+a+')';mx.fillRect(s.x+Math.cos(s.a)*r-2,s.y+Math.sin(s.a)*r-2,4,4);} });
   sparkles=sparkles.filter(s=>s.t<1);
 
-  // Domain units
+  // Commander at crossroads (6,10) — drawn first so units appear on top
   const pulse=0.5+0.5*Math.sin(time/250);
+  const hx=6*TS+TS/2,hy=10*TS+TS/2,lvl=hpLevel();
+  const tokCol=['#3a7aff','#ffcc22','#ff8822','#ff2a2a'][lvl];
+  mx.strokeStyle=tokCol+'88'; mx.lineWidth=2;
+  mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
+  mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,hy+7,9,4,0,0,7); mx.fill();
+  mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
+  if(spriteImg.complete&&spriteImg.naturalWidth>0){ mx.drawImage(spriteImg,hx-14,hy-18,28,32); }
+  else{ mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,hy-14); mx.lineTo(hx+14,hy); mx.lineTo(hx,hy+14); mx.lineTo(hx-14,hy); mx.closePath(); mx.fill(); }
+  mx.restore();
+  if(lvl===3){ const v=mx.createRadialGradient(COLS*TS/2,ROWS*TS/2,40,COLS*TS/2,ROWS*TS/2,COLS*TS); v.addColorStop(0,'rgba(238,34,34,0)'); v.addColorStop(1,'rgba(180,0,0,0.5)'); mx.fillStyle=v; mx.fillRect(0,0,COLS*TS,ROWS*TS); }
+
+  // Domain units — drawn after commander so they're on top when at center
   DOMAINS.forEach((d,i)=>{
     const prog=domainProgress(i),hp=domainHP(i);
     const tgt=posOnPath(d.path,prog);
@@ -925,17 +944,6 @@ function drawMap(time){
     drawUnit(unitPos[i].x,unitPos[i].y,i,hp);
   });
 
-  // Commander at crossroads (6,10)
-  const hx=6*TS+TS/2,hy=10*TS+TS/2,lvl=hpLevel();
-  const tokCol=['#3a7aff','#ffcc22','#ff8822','#ff2a2a'][lvl];
-  mx.strokeStyle=tokCol+'88'; mx.lineWidth=2;
-  mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
-  mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,hy+7,9,4,0,0,7); mx.fill();
-  mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
-  if(spriteImg.complete&&spriteImg.naturalWidth>0){ mx.drawImage(spriteImg,hx-14,hy-18,28,32); }
-  else{ mx.fillStyle=tokCol; mx.beginPath(); mx.moveTo(hx,hy-14); mx.lineTo(hx+14,hy); mx.lineTo(hx,hy+14); mx.lineTo(hx-14,hy); mx.closePath(); mx.fill(); }
-  mx.restore();
-  if(lvl===3){ const v=mx.createRadialGradient(COLS*TS/2,ROWS*TS/2,40,COLS*TS/2,ROWS*TS/2,COLS*TS); v.addColorStop(0,'rgba(238,34,34,0)'); v.addColorStop(1,'rgba(180,0,0,0.5)'); mx.fillStyle=v; mx.fillRect(0,0,COLS*TS,ROWS*TS); }
   mx.restore();
 }
 
