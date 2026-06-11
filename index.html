@@ -47,6 +47,8 @@
   .portCard:hover,.portCard.active{border-color:var(--gold);}
   .portCanvas{width:80px;height:80px;display:block;image-rendering:pixelated;}
   .portName{font-size:9px;color:var(--gold);letter-spacing:.5px;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;width:100%;text-overflow:ellipsis;}
+  .portRow{display:flex;flex-direction:column;align-items:center;width:100%;}
+  .portInfo{display:flex;flex-direction:column;align-items:center;width:100%;}
   .portCard.flash{animation:cardflash .6s steps(2);}
   @keyframes cardflash{0%,50%{border-color:var(--gold);box-shadow:0 0 14px rgba(255,215,0,.8);}25%,75%{border-color:#2a2050;box-shadow:none;}}
   .portChip{margin-top:3px;}
@@ -271,14 +273,44 @@
   .tav-preset-wrap{margin-top:6px;padding:6px;border:1px dashed #3a3060;background:rgba(10,8,26,.4);}
   .tav-preset-lbl{font-size:9px;color:#9a8ad0;letter-spacing:1px;margin-bottom:4px;}
 
-  /* Welcome card (first-run) */
-  #welcomeWrap{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:55;display:none;align-items:center;justify-content:center;padding:16px;}
+  /* Welcome card (first-run) — meet your party flow */
+  #welcomeWrap{position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:55;display:none;align-items:center;justify-content:center;padding:16px;}
   #welcomeWrap.open{display:flex;}
-  #welcomeBox{width:100%;max-width:440px;display:flex;flex-direction:column;gap:12px;padding:20px;}
-  .wc-title{font-size:12px;color:var(--gold);text-align:center;letter-spacing:2px;}
-  .wc-body{font-size:9px;color:var(--text);line-height:1.9;text-align:center;letter-spacing:1px;}
-  #welcomeSeedBtn{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:14px;min-height:48px;cursor:pointer;letter-spacing:1px;}
-  #welcomeEmptyBtn{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;}
+  #meetBox{width:100%;max-width:460px;display:flex;flex-direction:column;gap:0;overflow:hidden;}
+  /* Progress dots */
+  #meetDots{display:flex;justify-content:center;gap:8px;padding:14px 0 10px;}
+  .meet-dot{width:10px;height:10px;border:2px solid #4a3a8a;background:transparent;transition:background .2s,border-color .2s;}
+  .meet-dot.active{background:var(--gold);border-color:var(--gold);}
+  .meet-dot.done{background:#4a3a8a;border-color:#4a3a8a;}
+  /* Character hero area */
+  #meetHero{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0 6px;}
+  #meetPortraitCV{image-rendering:pixelated;border:2px solid #4a3a8a;background:#070710;}
+  #meetSprite{image-rendering:pixelated;width:48px;height:48px;object-fit:contain;}
+  #meetCls{font-size:14px;letter-spacing:3px;text-align:center;}
+  #meetDomain{font-size:9px;color:#9a8ad0;letter-spacing:2px;text-align:center;}
+  #meetBio{font-size:9px;color:var(--text);line-height:1.9;letter-spacing:1px;text-align:center;padding:0 8px 6px;}
+  /* Habit pick area */
+  #meetHabits{border-top:1px solid #2a2050;padding:10px 12px 8px;display:flex;flex-direction:column;gap:6px;min-height:80px;max-height:36vh;overflow-y:auto;}
+  .meet-habit-lbl{font-size:9px;color:#9a8ad0;letter-spacing:1px;}
+  .meet-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .meet-chip{font-family:'Press Start 2P',monospace;font-size:8px;color:#c8b8ff;
+    background:rgba(74,58,138,.18);border:1px solid #3a3060;padding:8px 10px;
+    min-height:44px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;gap:5px;
+    transition:border-color .15s,background .15s;}
+  .meet-chip.sel{background:rgba(255,215,0,.15);border-color:var(--gold);color:var(--gold);}
+  .meet-chip .mck{width:12px;height:12px;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:9px;}
+  /* Foot nav */
+  #meetFoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 14px;border-top:1px solid #2a2050;}
+  #meetSkip{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:10px 14px;min-height:44px;cursor:pointer;letter-spacing:1px;}
+  #meetNext{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px 20px;min-height:48px;cursor:pointer;letter-spacing:1px;}
+  /* Party tab preset panel */
+  .party-habits-btn{font-family:'Press Start 2P',monospace;font-size:8px;background:rgba(255,215,0,.07);
+    color:#9a8ad0;border:1px dashed #3a3060;padding:8px 10px;min-height:36px;cursor:pointer;letter-spacing:1px;
+    width:100%;text-align:center;margin-top:4px;}
+  .party-habits-btn:hover{color:var(--gold);border-color:var(--gold);}
+  .party-preset-panel{display:none;margin-top:6px;padding:8px;border:1px solid #2a2050;background:rgba(10,8,26,.7);flex-direction:column;gap:6px;}
+  .party-preset-panel.open{display:flex;}
+  .pp-chips{display:flex;flex-wrap:wrap;gap:5px;}
 
   /* Brain-dump modal */
   #dumpWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:46;display:none;align-items:center;justify-content:center;padding:16px;}
@@ -325,9 +357,10 @@
     body[data-tab=PARTY] #listPanel{display:none;}
     body[data-tab=PARTY] #portraitCol{position:fixed;top:54px;left:0;right:0;bottom:52px;
       overflow-y:auto;padding:10px;gap:8px;background:#0a0818;}
-    body[data-tab=PARTY] .portCard{width:100%;flex-direction:row;gap:10px;padding:8px;min-height:64px;align-items:center;}
+    body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:4px;padding:10px;align-items:stretch;}
+    body[data-tab=PARTY] .portRow{display:flex;align-items:center;gap:10px;}
     body[data-tab=PARTY] .portCanvas{width:56px;height:56px;flex:0 0 56px;}
-    body[data-tab=PARTY] .portName{text-align:left;margin-top:0;flex:1;}
+    body[data-tab=PARTY] .portName{text-align:left;margin-top:0;}
     #statsPanel{width:100%;right:0;left:0;top:0;border-left:none;border-right:none;border-top:none;}
     .stat-name{font-size:9px;}
     #formPanel{bottom:52px;}
@@ -525,11 +558,23 @@
 </div>
 
 <div id="welcomeWrap">
-  <div id="welcomeBox" class="glass">
-    <div class="wc-title">⚔ WELCOME, ADVENTURER</div>
-    <div class="wc-body">YOUR QUEST LOG AWAITS.<br><br>BEGIN WITH A SAMPLE CAMPAIGN TO SEE THE SYSTEM IN ACTION, OR START WITH A BLANK SLATE AND CAPTURE YOUR OWN FIRST QUEST.</div>
-    <button id="welcomeSeedBtn" onclick="welcomeSeed()">⚑ START A SAMPLE CAMPAIGN</button>
-    <button id="welcomeEmptyBtn" onclick="welcomeEmpty()">START EMPTY</button>
+  <div id="meetBox" class="glass">
+    <div id="meetDots"></div>
+    <div id="meetHero">
+      <canvas id="meetPortraitCV" width="120" height="120"></canvas>
+      <img id="meetSprite" src="" alt="">
+      <div id="meetCls"></div>
+      <div id="meetDomain"></div>
+      <div id="meetBio"></div>
+    </div>
+    <div id="meetHabits">
+      <div class="meet-habit-lbl">PICK HABITS TO ADOPT</div>
+      <div class="meet-chips" id="meetChips"></div>
+    </div>
+    <div id="meetFoot">
+      <button id="meetSkip" onclick="meetAdvance(false)">SKIP</button>
+      <button id="meetNext" onclick="meetAdvance(true)">NEXT →</button>
+    </div>
   </div>
 </div>
 
@@ -696,15 +741,57 @@ function buildPortraitCol(){
   const col=document.getElementById('portraitCol');
   DOMAINS.forEach((d,i)=>{
     const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
-    card.onclick=()=>openFocus(i);
-    // Always use canvas so we can render sheets, individual images, or placeholders uniformly
+    card.onclick=(e)=>{ if(!e.target.closest('.party-habits-btn,.party-preset-panel')) openFocus(i); };
+    // Portrait row: canvas + name+chip stacked
+    const portRow=document.createElement('div'); portRow.className='portRow';
     const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=80; cv.height=80;
     renderPortraitCanvas(cv,d,i,0);
-    card.appendChild(cv);
-    const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; card.appendChild(nm);
-    const chipWrap=document.createElement('div'); chipWrap.className='portChip'; chipWrap.id='portChip'+i;
-    card.appendChild(chipWrap);
+    portRow.appendChild(cv);
+    const portInfo=document.createElement('div'); portInfo.className='portInfo';
+    const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; portInfo.appendChild(nm);
+    const chipWrap=document.createElement('div'); chipWrap.className='portChip'; chipWrap.id='portChip'+i; portInfo.appendChild(chipWrap);
+    portRow.appendChild(portInfo);
+    card.appendChild(portRow);
+
+    // "+ HABITS" button — opens inline preset picker for this domain
+    const habBtn=document.createElement('button'); habBtn.className='party-habits-btn';
+    habBtn.textContent='＋ HABITS';
+    habBtn.onclick=(e)=>{ e.stopPropagation(); togglePartyHabits(i, panel); };
+    card.appendChild(habBtn);
+
+    const panel=document.createElement('div'); panel.className='party-preset-panel'; panel.id='partyPanel'+i;
+    card.appendChild(panel);
+
     col.appendChild(card);
+  });
+}
+
+function togglePartyHabits(di, panel){
+  const isOpen = panel.classList.contains('open');
+  // close all panels first
+  document.querySelectorAll('.party-preset-panel').forEach(p=>p.classList.remove('open'));
+  if(isOpen) return;
+  panel.innerHTML = '<div class="meet-habit-lbl" style="font-size:9px;color:#9a8ad0;letter-spacing:1px;">LOADING…</div>';
+  panel.classList.add('open');
+  loadPresets().then(presets => {
+    const dp = presets.filter(p=>p.domainIdx===di);
+    if(dp.length===0){ panel.innerHTML='<div style="font-size:9px;color:#6a5aa0;letter-spacing:1px;">NO PRESETS</div>'; return; }
+    panel.innerHTML = '<div class="meet-habit-lbl" style="font-size:9px;color:#9a8ad0;letter-spacing:1px;margin-bottom:4px;">ADD HABIT</div>';
+    const chips=document.createElement('div'); chips.className='pp-chips';
+    dp.forEach(p=>{
+      const ch=document.createElement('div'); ch.className='meet-chip';
+      ch.style.fontSize='8px';
+      ch.innerHTML='<span>'+p.name.toUpperCase()+'</span>'
+        +'<span style="color:#9a8ad0;font-size:7px;white-space:nowrap;margin-left:4px;">'+p.goal+'×</span>';
+      ch.onclick=()=>{
+        addTask(p.name.toUpperCase(),di,T_HABIT,p.goal,null,0,p.cap);
+        recalcDerived();save();refresh();
+        showToast(p.name.toUpperCase()+' ADDED!',DOMAINS[di].color);
+        panel.classList.remove('open');
+      };
+      chips.appendChild(ch);
+    });
+    panel.appendChild(chips);
   });
 }
 
@@ -1917,12 +2004,119 @@ function seedSampleCampaign(){
     recalcDerived(); save(); refresh();
   });
 }
+// ============ MEET YOUR PARTY — first-run onboarding ============
+const DOMAIN_BIO = [
+  'KEEPER OF THE HEARTH.\nMASTER OF HOME ARTS.\nYOUR SANCTUARY AWAITS.',
+  'SEEKER OF PROFIT.\nFORGER OF CAREERS.\nTHE GRIND IS YOUR GOLD.',
+  'GUARDIAN OF THE BODY.\nCHAMPION OF VITALITY.\nSTRONG IS THE WAY.',
+  'WEAVER OF DREAMS.\nHARBINGER OF MUSE.\nCREATE OR PERISH.',
+  'SHADOW OF THE GUILD.\nBROKER OF BONDS.\nCONNECTION IS POWER.',
+];
+let _meetStep = 0;
+let _meetSelected = {}; // key: domain+name, value: preset obj
+let _meetPresets = []; // all presets, loaded once
+
 function bootWelcome(){
   if(META.welcomed) return;
   if(state.tasks.length>0){ META.welcomed=true; saveMeta(); return; }
-  document.getElementById('welcomeWrap').classList.add('open');
+  loadPresets().then(presets => {
+    _meetPresets = presets;
+    _meetStep = 0;
+    _meetSelected = {};
+    _renderMeetStep();
+    document.getElementById('welcomeWrap').classList.add('open');
+  });
 }
 function closeWelcome(){ document.getElementById('welcomeWrap').classList.remove('open'); }
+
+function _renderMeetStep(){
+  const i = _meetStep;
+  const d = DOMAINS[i];
+
+  // Dots
+  const dotWrap = document.getElementById('meetDots');
+  dotWrap.innerHTML = '';
+  DOMAINS.forEach((_,j) => {
+    const dot = document.createElement('div');
+    dot.className = 'meet-dot' + (j===i?' active':j<i?' done':'');
+    dotWrap.appendChild(dot);
+  });
+
+  // Portrait canvas
+  const cv = document.getElementById('meetPortraitCV');
+  cv.style.borderColor = d.color;
+  renderPortraitCanvas(cv, d, i, 0);
+
+  // Sprite
+  const spriteEl = document.getElementById('meetSprite');
+  spriteEl.src = d.sprite;
+
+  // Text
+  document.getElementById('meetCls').textContent = d.cls;
+  document.getElementById('meetCls').style.color = d.color;
+  document.getElementById('meetDomain').textContent = d.name + ' DOMAIN';
+  document.getElementById('meetBio').textContent = DOMAIN_BIO[i];
+
+  // Habit chips
+  const chips = document.getElementById('meetChips');
+  chips.innerHTML = '';
+  const domainPresets = _meetPresets.filter(p => p.domainIdx === i);
+  if(domainPresets.length === 0){
+    const none = document.createElement('div');
+    none.style.cssText = 'font-size:9px;color:#6a5aa0;letter-spacing:1px;';
+    none.textContent = 'NO PRESETS AVAILABLE';
+    chips.appendChild(none);
+  } else {
+    domainPresets.forEach(p => {
+      const key = i + ':' + p.name;
+      const chip = document.createElement('div');
+      const isSel = !!_meetSelected[key];
+      chip.className = 'meet-chip' + (isSel?' sel':'');
+      chip.innerHTML = '<span class="mck">'+(isSel?'✓':'')+'</span>'
+        +'<span>'+p.name.toUpperCase()+'</span>'
+        +'<span style="color:#9a8ad0;font-size:7px;white-space:nowrap;">'+p.goal+'×/WK</span>';
+      chip.onclick = () => {
+        if(_meetSelected[key]){ delete _meetSelected[key]; }
+        else { _meetSelected[key] = p; }
+        _renderMeetStep();
+      };
+      chips.appendChild(chip);
+    });
+  }
+
+  // Foot buttons
+  const isLast = i === DOMAINS.length - 1;
+  document.getElementById('meetNext').textContent = isLast ? '⚔ BEGIN' : 'NEXT →';
+  document.getElementById('meetSkip').textContent = isLast ? 'START EMPTY' : 'SKIP';
+}
+
+function meetAdvance(keepSelected){
+  if(!keepSelected){
+    // deselect all chips for this step
+    const i = _meetStep;
+    Object.keys(_meetSelected).forEach(k => { if(k.startsWith(i+':')) delete _meetSelected[k]; });
+  }
+  if(_meetStep < DOMAINS.length - 1){
+    _meetStep++;
+    _renderMeetStep();
+  } else {
+    _meetFinish();
+  }
+}
+
+function _meetFinish(){
+  META.welcomed = true; saveMeta();
+  closeWelcome();
+  const selected = Object.values(_meetSelected);
+  if(selected.length > 0){
+    selected.forEach(p => {
+      addTask(p.name.toUpperCase(), p.domainIdx, T_HABIT, p.goal, null, 0, p.cap);
+    });
+    recalcDerived(); save(); refresh();
+    showToast('⚔ PARTY ASSEMBLED — '+selected.length+' HABIT'+(selected.length>1?'S':'')+' ADOPTED!','#44cc44');
+  }
+}
+// Compat shims for tests and external callers
 function welcomeSeed(){
   META.welcomed=true; saveMeta();
   closeWelcome();
