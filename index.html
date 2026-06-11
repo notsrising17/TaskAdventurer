@@ -984,7 +984,7 @@ function statusChip(idx){
 }
 
 // Roll derived weekly state forward (called where recalcHP used to be)
-function recalcDerived(){ checkWeeklyReset(); }
+function recalcDerived(){ checkWeeklyReset(); checkParents(); }
 // Append a week outcome to a task's rolling log (cap 26, drop oldest)
 function pushWeekLog(t,w,hit){
   if(!t.weekLog) t.weekLog=[];
@@ -1090,6 +1090,8 @@ function fmtDue(due){
 // Build one quest row (shared by the home list and the focus panel).
 // onUpdate: extra re-render callback after any action (focus panel uses it).
 function buildQuestRow(task,onUpdate){
+  // A split parent is a marker, not a checkbox: it rolls up its children
+  if(hasChildren(task)) return buildParentRow(task);
   const over=isOverdue(task);
   const dom=DOMAINS[task.domain||0];
   const recurring=task.repeat>0;
@@ -1115,7 +1117,85 @@ function buildQuestRow(task,onUpdate){
   if(recurring&&(task.doneCount||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo last completion'; minus.onclick=act(()=>decRecurring(task.id)); div.appendChild(minus); }
   div.appendChild(editBtn(task.id));
   const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=act(()=>deleteTask(task.id)); div.appendChild(del);
+  // Repeated snoozing suggests the quest is too big — offer a split, once
+  if(!task.done&&!task.parentId&&!task.splitAsked&&(task.snoozeCount||0)>=3){
+    const wrap=document.createElement('div');
+    wrap.style.display='flex'; wrap.style.flexDirection='column'; wrap.style.gap='3px';
+    wrap.appendChild(div);
+    const p=document.createElement('div'); p.className='splitPrompt';
+    const txt=document.createElement('span'); txt.style.flex='1';
+    txt.textContent='THIS MAY BE A BOSS FIGHT. SPLIT IT?';
+    const yes=document.createElement('button'); yes.textContent='⚔ SPLIT';
+    yes.onclick=()=>openSplit(task.id);
+    const no=document.createElement('button'); no.textContent='IT\'S FINE';
+    no.onclick=()=>{ task.splitAsked=true; save(); refresh(); onUpdate&&onUpdate(); };
+    p.appendChild(txt); p.appendChild(yes); p.appendChild(no);
+    wrap.appendChild(p);
+    return wrap;
+  }
   return div;
+}
+
+// Parent marker row: "N/M ENCOUNTERS" — completes itself when children do
+function buildParentRow(task){
+  const kids=state.tasks.filter(c=>c.parentId===task.id);
+  const done=kids.filter(c=>c.done).length;
+  const div=document.createElement('div');
+  div.className='task domain-'+(task.domain||0)+(task.done?' done':'');
+  const name=document.createElement('div'); name.className='tname'; name.textContent='⚑ '+task.name;
+  const meta=document.createElement('div'); meta.className='tmeta';
+  const pr=document.createElement('div'); pr.className='ttype';
+  pr.textContent=task.done?'✓ CONQUERED':done+'/'+kids.length+' ENCOUNTERS';
+  meta.appendChild(pr);
+  div.appendChild(name); div.appendChild(meta);
+  const del=document.createElement('button'); del.className='del'; del.textContent='X';
+  del.onclick=()=>deleteTask(task.id);
+  div.appendChild(del);
+  return div;
+}
+
+// ============ BOSS-FIGHT SPLIT ============
+let splitId=null;
+function openSplit(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  splitId=id;
+  document.getElementById('splitName').textContent=t.name.toUpperCase();
+  document.querySelectorAll('.splitInput').forEach(i=>i.value='');
+  document.getElementById('splitWrap').classList.add('open');
+  document.querySelector('.splitInput').focus();
+}
+function closeSplit(){ splitId=null; document.getElementById('splitWrap').classList.remove('open'); }
+function saveSplit(){
+  const t=state.tasks.find(x=>x.id===splitId); if(!t){ closeSplit(); return; }
+  const names=[...document.querySelectorAll('.splitInput')].map(i=>i.value.trim()).filter(Boolean);
+  if(!names.length){ closeSplit(); return; }
+  names.forEach(name=>{
+    state.tasks.push({id:Date.now()+Math.random(),name,domain:t.domain,type:T_QUEST,goal:1,
+      weekStart:mondayStr(),due:null,done:false,repeat:0,doneCount:0,snoozeCount:0,parentId:t.id});
+  });
+  t.splitAsked=true;
+  t.due=null; t.repeat=0; // the parent is a marker now — children carry the work
+  closeSplit();
+  recalcDerived();save();refresh();
+  showToast('⚔ THE BOSS FIGHT IS SPLIT — '+names.length+' ENCOUNTERS!');
+}
+document.querySelectorAll('.splitInput').forEach(inp=>{
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter') saveSplit();
+    else if(e.key==='Escape') closeSplit();
+  });
+});
+// Parents auto-conquer when every child quest is done
+function checkParents(){
+  state.tasks.forEach(t=>{
+    if(t.type!==T_QUEST||t.done||!hasChildren(t)) return;
+    const kids=state.tasks.filter(c=>c.parentId===t.id);
+    if(kids.every(c=>c.done)){
+      t.done=true;
+      logEvent('done',t);
+      showToast('⚑ '+t.name.toUpperCase().slice(0,22)+' CONQUERED!','#ffd700');
+    }
+  });
 }
 
 // ============ TODAY STRIP ============
