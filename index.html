@@ -246,6 +246,28 @@
   .splitPrompt{display:flex;align-items:center;gap:6px;font-size:9px;color:#ffcc00;padding:6px 8px;border:1px dashed #8a6a20;background:rgba(255,204,0,.04);letter-spacing:1px;flex-wrap:wrap;}
   .splitPrompt button{font-family:inherit;font-size:9px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid #8a6a20;padding:8px 10px;min-height:36px;cursor:pointer;}
 
+  /* Preset chips — ADD WITH DETAILS + tavern classify */
+  #addPresetRow{width:100%;display:none;flex-direction:column;gap:4px;padding:6px 0 2px;}
+  #addPresetRow.visible{display:flex;}
+  .preset-lbl{font-size:9px;color:#9a8ad0;letter-spacing:1px;}
+  .preset-strip{display:flex;flex-wrap:wrap;gap:6px;}
+  .preset-chip{font-family:'Press Start 2P',monospace;font-size:8px;color:#c8b8ff;
+    background:rgba(74,58,138,.18);border:1px solid #3a3060;padding:8px 10px;
+    min-height:44px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;gap:6px;
+    transition:border-color .15s;}
+  .preset-chip:hover,.preset-chip.expanded{border-color:var(--gold);color:var(--gold);}
+  .pstep{font-family:'Press Start 2P',monospace;font-size:11px;background:rgba(255,215,0,.1);
+    color:var(--gold);border:1px solid #8a6a20;width:36px;height:44px;cursor:pointer;flex:0 0 auto;}
+  .pgoal{font-size:9px;color:var(--gold);min-width:44px;text-align:center;white-space:nowrap;}
+  .pcap{font-family:'Press Start 2P',monospace;font-size:8px;background:rgba(255,215,0,.08);
+    color:#9a8ad0;border:1px solid #3a3060;padding:0 8px;height:44px;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
+  .pcap.on{color:var(--gold);border-color:var(--gold);background:rgba(255,215,0,.15);}
+  .padd{font-family:'Press Start 2P',monospace;font-size:9px;background:var(--gold);
+    color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:0 12px;height:44px;cursor:pointer;letter-spacing:1px;}
+  .padd:active{transform:translateY(2px);border-bottom-width:1px;}
+  .tav-preset-wrap{margin-top:6px;padding:6px;border:1px dashed #3a3060;background:rgba(10,8,26,.4);}
+  .tav-preset-lbl{font-size:9px;color:#9a8ad0;letter-spacing:1px;margin-bottom:4px;}
+
   /* Welcome card (first-run) */
   #welcomeWrap{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:55;display:none;align-items:center;justify-content:center;padding:16px;}
   #welcomeWrap.open{display:flex;}
