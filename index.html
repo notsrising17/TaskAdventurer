@@ -503,23 +503,52 @@ function save(){
 // Types: done/undone (quest), habit/unhabit, target/untarget,
 //        week (weekly habit goal met), capture, report
 const EVENTS_KEY='ta_events';
-const EVENTS_MAX=5000; // oldest trimmed beyond this
+const EVENTS_SUM_KEY='ta_events_sum'; // monthly rollups of pruned events
 state.events=[];
+state.eventSums=[]; // [{m:'YYYY-MM', ev, d, n}] — counts per domain per type
 function loadEvents(){
   try{
     const e=JSON.parse(localStorage.getItem(EVENTS_KEY)||'[]');
     if(Array.isArray(e)) state.events=e;
   }catch(err){ state.events=[]; }
+  try{
+    const s=JSON.parse(localStorage.getItem(EVENTS_SUM_KEY)||'[]');
+    if(Array.isArray(s)) state.eventSums=s;
+  }catch(err){ state.eventSums=[]; }
+  pruneEvents();
 }
 function saveEvents(){
-  try{ localStorage.setItem(EVENTS_KEY,JSON.stringify(state.events)); }catch(e){}
+  try{
+    localStorage.setItem(EVENTS_KEY,JSON.stringify(state.events));
+    localStorage.setItem(EVENTS_SUM_KEY,JSON.stringify(state.eventSums));
+  }catch(e){}
+}
+// Retention: raw events kept for trailing 12 months; older ones roll up
+// into monthly summary rows so long-term stats survive without unbounded
+// JSON.parse cost on every boot
+function pruneEvents(){
+  const cutoff=new Date(); cutoff.setMonth(cutoff.getMonth()-12);
+  const cutMs=cutoff.getTime();
+  if(!state.events.length||state.events[0].t>=cutMs) return;
+  const keep=[],old=[];
+  state.events.forEach(e=>(e.t<cutMs?old:keep).push(e));
+  if(!old.length) return;
+  old.forEach(e=>{
+    const dt=new Date(e.t);
+    const m=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    const d=e.d!=null?e.d:-1;
+    let row=state.eventSums.find(s=>s.m===m&&s.ev===e.ev&&s.d===d);
+    if(!row){ row={m,ev:e.ev,d,n:0}; state.eventSums.push(row); }
+    row.n++;
+  });
+  state.events=keep;
+  saveEvents();
 }
 function logEvent(ev,task,domainIdx){
   const e={t:Date.now(),ev};
   if(task){ e.id=task.id; e.d=task.domain||0; e.k=task.type||0; }
   else if(domainIdx!=null){ e.d=domainIdx; }
   state.events.push(e);
-  if(state.events.length>EVENTS_MAX) state.events=state.events.slice(-EVENTS_MAX);
   saveEvents();
 }
 // Resolve an event's task name at display time; deleted tasks get a fallback
@@ -970,7 +999,7 @@ function a11y(el,label){
 // Everything lives in localStorage, which browsers can evict — give the
 // player a real save file
 function exportData(){
-  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:loadCheckinDates(),events:state.events};
+  const payload={version:SCHEMA_VERSION,exported:new Date().toISOString(),name:state.name,tasks:state.tasks,captures:state.captures,checkin:loadCheckinDates(),events:state.events,eventSums:state.eventSums};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -994,7 +1023,9 @@ function importData(file){
         const dates=Array.isArray(p.checkin)?p.checkin:[p.checkin];
         saveCheckinDates(dates);
       }
-      if(Array.isArray(p.events)){ state.events=p.events.slice(-EVENTS_MAX); saveEvents(); }
+      if(Array.isArray(p.events)) state.events=p.events;
+      if(Array.isArray(p.eventSums)) state.eventSums=p.eventSums;
+      pruneEvents(); saveEvents();
       recalcHP(); save(); refresh(); updatePortraits(); updateCheckinBtn();
       document.getElementById('heroNameDisplay').textContent=state.name;
       visSteps=DOMAINS.map((_,i)=>domainCurrentStep(i));
