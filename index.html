@@ -417,6 +417,10 @@
       <input type="date" id="taskDate"></div>
     <div class="fgroup" id="fgRepeat"><label class="flabel" for="taskRepeat">REPEAT EVERY N DAYS (OPTIONAL)</label>
       <input type="number" id="taskRepeat" placeholder="E.G. 7" min="1" max="365"></div>
+    <div id="addPresetRow">
+      <div class="preset-lbl">OR PICK A PRESET HABIT:</div>
+      <div class="preset-strip" id="addPresetStrip"></div>
+    </div>
     <button id="addBtn">+ ADD</button>
   </div>
   <div id="listBody"></div>
@@ -1859,27 +1863,42 @@ function stowDump(){
 }
 
 // ============ WELCOME CARD (Tier 0) ============
-const SAMPLE_TASKS=[
+// Quest stubs — seeded verbatim regardless of preset state
+const SAMPLE_QUESTS=[
   {name:'TIDY THE COMMON ROOM',domain:0,type:T_QUEST},
   {name:'PREP MEALS FOR THE WEEK',domain:0,type:T_QUEST},
   {name:'REPLY TO ALL GUILD MESSAGES',domain:1,type:T_QUEST},
   {name:'DRAFT THE WEEKLY REPORT',domain:1,type:T_QUEST},
-  {name:'MORNING WALK — 20 MIN',domain:2,type:T_HABIT,goal:5},
-  {name:'DRINK 8 CUPS OF WATER',domain:2,type:T_HABIT,goal:7},
-  {name:'SKETCH OR WRITE FOR 15 MIN',domain:3,type:T_HABIT,goal:3},
   {name:'REACH OUT TO A FRIEND',domain:4,type:T_QUEST},
   {name:'PLAN NEXT SOCIAL OUTING',domain:4,type:T_QUEST},
 ];
-function seedTask({name,domain,type,goal}){
+function seedTask({name,domain,type,goal,dailyCap}){
   const ti=type||T_QUEST;
   const base={id:Date.now()+Math.random(),name,domain,type:ti,goal:goal||1,
     weekStart:mondayStr(),due:null,done:false,repeat:0,doneCount:0,snoozeCount:0};
-  const extra=ti===T_HABIT?{dailyCap:true,weekCount:0,weeklyHits:0,wkStreak:0,lastDone:null}:{};
+  const extra=ti===T_HABIT?{dailyCap:dailyCap!==false,weekCount:0,weeklyHits:0,wkStreak:0,lastDone:null}:{};
   state.tasks.push(Object.assign(base,extra));
 }
 function seedSampleCampaign(){
-  SAMPLE_TASKS.forEach(t=>seedTask(t));
-  recalcDerived(); save(); refresh();
+  // Returns a Promise so welcomeSeed can await it
+  SAMPLE_QUESTS.forEach(t=>seedTask(t));
+  return loadPresets().then(presets => {
+    const samples = presets.filter(p => p.sample);
+    samples.forEach(p => seedTask({
+      name: p.name.toUpperCase(),
+      domain: p.domainIdx,
+      type: T_HABIT,
+      goal: p.goal,
+      dailyCap: p.cap,
+    }));
+    recalcDerived(); save(); refresh();
+  }).catch(() => {
+    // Last-resort fallback: hardcoded habits
+    [{name:'MORNING WALK — 20 MIN',domain:2,type:T_HABIT,goal:5},
+     {name:'DRINK 8 CUPS OF WATER',domain:2,type:T_HABIT,goal:7},
+     {name:'SKETCH OR WRITE FOR 15 MIN',domain:3,type:T_HABIT,goal:3}].forEach(t=>seedTask(t));
+    recalcDerived(); save(); refresh();
+  });
 }
 function bootWelcome(){
   if(META.welcomed) return;
@@ -1890,8 +1909,7 @@ function closeWelcome(){ document.getElementById('welcomeWrap').classList.remove
 function welcomeSeed(){
   META.welcomed=true; saveMeta();
   closeWelcome();
-  seedSampleCampaign();
-  showToast('⚑ SAMPLE CAMPAIGN READY!','#44cc44');
+  return seedSampleCampaign().then(()=>showToast('⚑ SAMPLE CAMPAIGN READY!','#44cc44'));
 }
 function welcomeEmpty(){
   META.welcomed=true; saveMeta();
@@ -1928,8 +1946,88 @@ function buildTavernGroup(){
     const del=document.createElement('button'); del.className='del'; del.textContent='X'; del.onclick=()=>deleteTask(t.id);
     row.appendChild(nm); row.appendChild(sel); row.appendChild(editBtn(t.id)); row.appendChild(del);
     grp.appendChild(row);
+    // Preset section per tavern row
+    const presetWrap = document.createElement('div'); presetWrap.className='tav-preset-wrap';
+    const presetLbl = document.createElement('div'); presetLbl.className='tav-preset-lbl'; presetLbl.textContent='OR REPLACE WITH A PRESET:';
+    const presetStrip = document.createElement('div'); presetStrip.className='preset-strip'; presetStrip.id='tavPresetStrip-'+t.id;
+    presetWrap.appendChild(presetLbl); presetWrap.appendChild(presetStrip);
+    grp.appendChild(presetWrap);
+    // Lazy load presets — only show after a domain is chosen via sel
+    sel.addEventListener('change', () => {
+      const di2 = parseInt(sel.value);
+      if(isNaN(di2)||di2<0) return;
+      renderTavernPresets(t.id, di2, presetStrip);
+    });
   });
   return grp;
+}
+
+// Render tavern preset chips for a given domain into a container element
+// State: tracks expanded chip per tavern task id
+const _tavPresetExpanded = {};
+function renderTavernPresets(taskId, di, strip){
+  strip.innerHTML = '';
+  _tavPresetExpanded[taskId] = null;
+  loadPresets().then(presets => {
+    const domPresets = presets.filter(p => p.domainIdx === di);
+    if(!domPresets.length) return;
+    domPresets.forEach((p, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'preset-chip';
+      chip.dataset.idx = idx;
+      chip.textContent = p.name.toUpperCase() + ' · ' + p.goal + '×WK';
+      chip.onclick = (e) => { e.stopPropagation(); toggleTavPresetChip(taskId, idx, domPresets, strip); };
+      strip.appendChild(chip);
+    });
+  });
+}
+
+function toggleTavPresetChip(taskId, idx, domPresets, strip){
+  const chips = strip.querySelectorAll('.preset-chip');
+  if(_tavPresetExpanded[taskId] === idx){
+    _tavPresetExpanded[taskId] = null;
+    chips.forEach((c, i) => {
+      const p = domPresets[i];
+      c.className = 'preset-chip'; c.innerHTML = '';
+      c.textContent = p.name.toUpperCase() + ' · ' + p.goal + '×WK';
+      c.onclick = (e) => { e.stopPropagation(); toggleTavPresetChip(taskId, i, domPresets, strip); };
+    });
+    return;
+  }
+  if(_tavPresetExpanded[taskId] !== null){
+    const prev = chips[_tavPresetExpanded[taskId]];
+    const pp = domPresets[_tavPresetExpanded[taskId]];
+    prev.className = 'preset-chip'; prev.innerHTML = '';
+    prev.textContent = pp.name.toUpperCase() + ' · ' + pp.goal + '×WK';
+    prev.onclick = (e) => { e.stopPropagation(); toggleTavPresetChip(taskId, _tavPresetExpanded[taskId], domPresets, strip); };
+  }
+  _tavPresetExpanded[taskId] = idx;
+  const p = domPresets[idx];
+  const chip = chips[idx];
+  chip.className = 'preset-chip expanded';
+  let goal = Math.min(Math.max(p.goal, 1), 14);
+  let cap = p.cap;
+  function rebuildTavChip(){
+    chip.innerHTML = '';
+    const minus = document.createElement('button'); minus.className = 'pstep'; minus.textContent = '−';
+    minus.onclick = (e) => { e.stopPropagation(); goal = Math.max(1, goal-1); rebuildTavChip(); };
+    const goalSpan = document.createElement('span'); goalSpan.className = 'pgoal'; goalSpan.textContent = goal + '×WK';
+    const plus = document.createElement('button'); plus.className = 'pstep'; plus.textContent = '+';
+    plus.onclick = (e) => { e.stopPropagation(); goal = Math.min(14, goal+1); rebuildTavChip(); };
+    const capBtn = document.createElement('button'); capBtn.className = 'pcap' + (cap ? ' on' : '');
+    capBtn.textContent = cap ? 'CAP ON' : 'CAP OFF';
+    capBtn.onclick = (e) => { e.stopPropagation(); cap = !cap; rebuildTavChip(); };
+    const addBtn = document.createElement('button'); addBtn.className = 'padd'; addBtn.textContent = '⚔ ADD';
+    addBtn.onclick = (e) => {
+      e.stopPropagation();
+      // Delete the tavern item and create the preset habit
+      deleteTask(taskId);
+      addTask(p.name.toUpperCase(), p.domainIdx, T_HABIT, goal, null, 0, cap);
+    };
+    chip.appendChild(minus); chip.appendChild(goalSpan); chip.appendChild(plus);
+    chip.appendChild(capBtn); chip.appendChild(addBtn);
+  }
+  rebuildTavChip();
 }
 
 // ============ ACTIONS ============
@@ -2390,6 +2488,102 @@ function populateSelects(){
   const sel=document.getElementById('taskDomain');
   DOMAINS.forEach((d,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=d.name; sel.appendChild(o); });
 }
+
+// ============ PRESET PICKER (ADD WITH DETAILS) ============
+// State: tracks which chip index is currently expanded
+let _addPresetExpanded = null;
+
+function renderAddPresets(di){
+  const row = document.getElementById('addPresetRow');
+  const strip = document.getElementById('addPresetStrip');
+  strip.innerHTML = '';
+  _addPresetExpanded = null;
+  loadPresets().then(presets => {
+    const domPresets = presets.filter(p => p.domainIdx === di);
+    if(!domPresets.length){ row.classList.remove('visible'); return; }
+    row.classList.add('visible');
+    domPresets.forEach((p, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'preset-chip';
+      chip.dataset.idx = idx;
+      chip.textContent = p.name.toUpperCase() + ' · ' + p.goal + '×WK';
+      chip.onclick = (e) => { e.stopPropagation(); toggleAddPresetChip(idx, domPresets); };
+      strip.appendChild(chip);
+    });
+  });
+}
+
+function toggleAddPresetChip(idx, domPresets){
+  const strip = document.getElementById('addPresetStrip');
+  const chips = strip.querySelectorAll('.preset-chip');
+  if(_addPresetExpanded === idx){
+    // collapse
+    _addPresetExpanded = null;
+    chips.forEach((c, i) => {
+      const p = domPresets[i];
+      c.className = 'preset-chip';
+      c.innerHTML = '';
+      c.textContent = p.name.toUpperCase() + ' · ' + p.goal + '×WK';
+      c.onclick = (e) => { e.stopPropagation(); toggleAddPresetChip(i, domPresets); };
+    });
+    return;
+  }
+  // collapse previously expanded
+  if(_addPresetExpanded !== null){
+    const prev = chips[_addPresetExpanded];
+    const pp = domPresets[_addPresetExpanded];
+    prev.className = 'preset-chip';
+    prev.innerHTML = '';
+    prev.textContent = pp.name.toUpperCase() + ' · ' + pp.goal + '×WK';
+    prev.onclick = (e) => { e.stopPropagation(); toggleAddPresetChip(_addPresetExpanded, domPresets); };
+  }
+  _addPresetExpanded = idx;
+  const p = domPresets[idx];
+  const chip = chips[idx];
+  chip.className = 'preset-chip expanded';
+  // mutable state for this chip's stepper
+  let goal = Math.min(Math.max(p.goal, 1), 14);
+  let cap = p.cap;
+  function rebuildChip(){
+    chip.innerHTML = '';
+    const minus = document.createElement('button'); minus.className = 'pstep'; minus.textContent = '−';
+    minus.onclick = (e) => { e.stopPropagation(); goal = Math.max(1, goal-1); rebuildChip(); };
+    const goalSpan = document.createElement('span'); goalSpan.className = 'pgoal'; goalSpan.textContent = goal + '×WK';
+    const plus = document.createElement('button'); plus.className = 'pstep'; plus.textContent = '+';
+    plus.onclick = (e) => { e.stopPropagation(); goal = Math.min(14, goal+1); rebuildChip(); };
+    const capBtn = document.createElement('button'); capBtn.className = 'pcap' + (cap ? ' on' : '');
+    capBtn.textContent = cap ? 'CAP ON' : 'CAP OFF';
+    capBtn.onclick = (e) => { e.stopPropagation(); cap = !cap; rebuildChip(); };
+    const addBtn = document.createElement('button'); addBtn.className = 'padd'; addBtn.textContent = '⚔ ADD';
+    addBtn.onclick = (e) => {
+      e.stopPropagation();
+      const di = parseInt(document.getElementById('taskDomain').value);
+      addTask(p.name.toUpperCase(), di, T_HABIT, goal, null, 0, cap);
+      // collapse and hide presets, close form
+      _addPresetExpanded = null;
+      document.getElementById('addPresetRow').classList.remove('visible');
+      toggleForm();
+    };
+    chip.appendChild(minus); chip.appendChild(goalSpan); chip.appendChild(plus);
+    chip.appendChild(capBtn); chip.appendChild(addBtn);
+  }
+  rebuildChip();
+}
+
+// Listen for domain change to refresh preset strip
+document.getElementById('taskDomain').addEventListener('change', function(){
+  const type = parseInt(document.getElementById('taskType').value);
+  if(type === T_HABIT){
+    renderAddPresets(parseInt(this.value));
+  }
+});
+// Also trigger when switching to habit type
+document.getElementById('taskType').addEventListener('change', function(){
+  const type = parseInt(this.value);
+  const di = parseInt(document.getElementById('taskDomain').value);
+  if(type === T_HABIT){ renderAddPresets(di); }
+  else { document.getElementById('addPresetRow').classList.remove('visible'); _addPresetExpanded = null; }
+});
 
 document.getElementById('addBtn').onclick=()=>{
   const name=document.getElementById('taskName').value.trim();
