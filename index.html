@@ -385,19 +385,21 @@ function isDoneToday(t){ return t.lastDone===todayStr(); }
 
 // ============ STATE ============
 const HP_MAX=100;
-let state={hp:HP_MAX, tasks:[], name:'HERO'};
+let state={hp:HP_MAX, tasks:[], name:'HERO', captures:[0,0,0,0,0]};
 
 function load(){
   try{
     const t=JSON.parse(localStorage.getItem('ta_tasks')||'[]'); if(Array.isArray(t)) state.tasks=t;
     const h=parseInt(localStorage.getItem('ta_hp')); if(!isNaN(h)) state.hp=h;
     state.name=(localStorage.getItem('ta_name')||'HERO').toUpperCase();
+    const c=JSON.parse(localStorage.getItem('ta_caps')||'[]'); if(Array.isArray(c)) state.captures=DOMAINS.map((_,i)=>c[i]||0);
   }catch(e){}
 }
 function save(){
   localStorage.setItem('ta_tasks',JSON.stringify(state.tasks));
   localStorage.setItem('ta_hp',String(state.hp));
   localStorage.setItem('ta_name',state.name);
+  localStorage.setItem('ta_caps',JSON.stringify(state.captures));
 }
 
 function isOverdue(t){
@@ -429,8 +431,33 @@ function domainScore(idx){
   return s;
 }
 const SCORE_TO_DEST=50;
+// Campaigns: each capture costs SCORE_TO_DEST points; progress is within the current campaign
 function domainProgress(idx){
-  return Math.min(1,domainScore(idx)/SCORE_TO_DEST);
+  const caps=(state.captures&&state.captures[idx])||0;
+  return Math.max(0,Math.min(1,domainScore(idx)/SCORE_TO_DEST-caps));
+}
+function isCaptured(idx){ return ((state.captures&&state.captures[idx])||0)>0; }
+
+// Capture ceremony — fires once per campaign completion
+let flashT=0; // screen flash timer (frames)
+function checkCaptures(){
+  DOMAINS.forEach((d,i)=>{
+    if(domainProgress(i)>=1){
+      state.captures[i]=(state.captures[i]||0)+1;
+      save();
+      // Ceremony: banner, screen flash, burst of sparkles at the building
+      showToast('🏆 '+d.dest+' CAPTURED BY '+d.cls+'!',d.color);
+      flashT=18;
+      const bx=d.targetTx*TS+TS/2,by=d.targetTy*TS+TS/2;
+      for(let k=0;k<3;k++) setTimeout(()=>sparkleAt(bx,by),k*350);
+      const pc=document.getElementById('pc'+i);
+      if(pc){ pc.classList.remove('flash'); void pc.offsetWidth; pc.classList.add('flash'); }
+      if(!localStorage.getItem('ta_hint2')){
+        localStorage.setItem('ta_hint2','1');
+        setTimeout(()=>showToast('A NEW CAMPAIGN BEGINS — MARCH AGAIN!'),2800);
+      }
+    }
+  });
 }
 
 function hpLevel(){ return hpLevelOf(state.hp); }
@@ -594,7 +621,7 @@ function toggleTask(id){
   recalcHP();save();refresh();
 }
 function deleteTask(id){ state.tasks=state.tasks.filter(x=>x.id!==id); recalcHP();save();refresh(); }
-function refresh(){ renderStats();renderList();checkGameOver(); }
+function refresh(){ checkCaptures();renderStats();renderList();checkGameOver(); }
 function checkGameOver(){ document.getElementById('gameover').classList.toggle('show',state.hp<=0); }
 
 // ============ MAP ============
@@ -776,6 +803,13 @@ function drawObjective(d,captured,idx){
   const tw=mx.measureText(d.dest).width;
   mx.fillStyle='rgba(5,5,16,.82)'; mx.fillRect(cx-tw/2-2,cy+14,tw+4,6.5);
   mx.fillStyle=captured?'#ffe840':'#ffd0d0'; mx.fillText(d.dest,cx,cy+15);
+  // campaign stars — one per capture
+  const caps=(state.captures&&state.captures[idx])||0;
+  if(caps>0){
+    mx.font='4px serif'; mx.fillStyle='#ffe840';
+    const stars='★'.repeat(Math.min(caps,5));
+    mx.fillText(stars,cx,cy+21.5);
+  }
 }
 
 function drawHomeHQ(cx,cy,captured,d){
@@ -1089,7 +1123,7 @@ function drawMap(time){
   }
 
   // Objectives
-  DOMAINS.forEach((d,i)=>drawObjective(d,domainProgress(i)>=1.0,i));
+  DOMAINS.forEach((d,i)=>drawObjective(d,isCaptured(i),i));
 
   // Sparkles
   sparkles.forEach(s=>{ s.t+=0.05; const r=s.t*24,a=1-s.t; if(a>0){mx.fillStyle='rgba(255,255,180,'+a+')';mx.fillRect(s.x+Math.cos(s.a)*r-2,s.y+Math.sin(s.a)*r-2,4,4);} });
@@ -1121,6 +1155,14 @@ function drawMap(time){
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
     }
+    // Dotted trail showing the remaining route to the destination
+    if(prog>0&&prog<1){
+      mx.fillStyle=d.color+'66';
+      for(let f=prog+0.04;f<1;f+=0.05){
+        const pt=posOnPath(d.path,f);
+        mx.fillRect(pt.x-1,pt.y-1,2,2);
+      }
+    }
     // Status ring only when degraded — a healthy unit needs no alert
     const ulvl=hpLevelOf(hp);
     if(ulvl>0){
@@ -1128,7 +1170,24 @@ function drawMap(time){
       mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
     }
     drawUnit(unitPos[i].x,unitPos[i].y,i,hp);
+    // Score plate under marching units — makes each task's contribution visible
+    if(prog>0&&prog<1){
+      const caps=(state.captures&&state.captures[i])||0;
+      const cur=Math.max(0,Math.round((domainScore(i)-caps*SCORE_TO_DEST)));
+      const txt=cur+'/'+SCORE_TO_DEST;
+      mx.font='3px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
+      const tw2=mx.measureText(txt).width;
+      mx.fillStyle='rgba(5,5,16,.8)'; mx.fillRect(unitPos[i].x-tw2/2-1.5,unitPos[i].y+11,tw2+3,5);
+      mx.fillStyle=d.color; mx.fillText(txt,unitPos[i].x,unitPos[i].y+12);
+    }
   });
+
+  // Capture flash — quick white pulse over the whole map
+  if(flashT>0){
+    mx.fillStyle='rgba(255,250,220,'+(flashT/18*0.45)+')';
+    mx.fillRect(0,0,COLS*TS,ROWS*TS);
+    flashT--;
+  }
 
   mx.restore();
 
