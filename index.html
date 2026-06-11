@@ -964,7 +964,18 @@ document.getElementById('heroNameInput').addEventListener('blur',()=>{ applyName
 document.getElementById('heroNameInput').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key==='Escape') document.getElementById('heroNameInput').blur(); });
 
 // ============ TASK LIST UI ============
-function fmtDue(due){ if(!due) return ''; const d=new Date(due+'T00:00:00'); return 'Due '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate(); }
+// The one due-date formatter. Relative phrasing within ±7 days; past-due is
+// capped at "7+ DAYS" so the number never grows into a guilt counter.
+function fmtDue(due){
+  if(!due) return '';
+  const n=dayDiff(due);
+  if(n<0){ const o=Math.min(-n,8); return 'BESIEGED '+(o>7?'7+':o)+' DAY'+(o===1?'':'S'); }
+  if(n===0) return 'TODAY';
+  if(n===1) return 'TOMORROW';
+  if(n<=7) return 'IN '+n+' DAYS';
+  const d=new Date(due+'T00:00:00');
+  return ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()]+' '+d.getDate();
+}
 
 // Build one quest row (shared by the home list and the focus panel).
 // onUpdate: extra re-render callback after any action (focus panel uses it).
@@ -988,7 +999,7 @@ function buildQuestRow(task,onUpdate){
     tl.textContent='↻ '+task.repeat+'D'+((task.doneCount||0)>0?' ×'+task.doneCount:''); meta.appendChild(tl);
   }
   div.appendChild(meta);
-  if(task.due){ const badge=document.createElement('div'); badge.className=over?'badge over':'badge due'; badge.textContent=over?'OVERDUE':fmtDue(task.due); div.appendChild(badge); }
+  if(task.due){ const badge=document.createElement('div'); badge.className=over?'badge over':'badge due'; badge.textContent=fmtDue(task.due); div.appendChild(badge); }
   if(over){ const sn=document.createElement('button'); sn.className='del'; sn.style.color='#ffcc66'; sn.style.borderColor='#8a6a20'; sn.style.background='#1a1408'; sn.textContent='+1D'; sn.title='Snooze: move due date to tomorrow'; sn.onclick=act(()=>snoozeTask(task.id)); div.appendChild(sn); }
   if(recurring&&(task.doneCount||0)>0){ const minus=document.createElement('button'); minus.className='del'; minus.style.color='#9ad0ff'; minus.style.borderColor='#3a5a8a'; minus.style.background='#0a1424'; minus.textContent='−'; minus.title='Undo last completion'; minus.onclick=act(()=>decRecurring(task.id)); div.appendChild(minus); }
   div.appendChild(editBtn(task.id));
@@ -1178,7 +1189,7 @@ function toggleTask(id){
       const base=(t.due&&t.due>=todayStr())?t.due:null;
       t.due=advanceDue(base,t.repeat);
       sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
-      showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due).toUpperCase().replace('DUE ','')+'!',d.color);
+      showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due)+'!',d.color);
     }
     else if(!t.done){ t.done=true; logEvent('done',t); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
     else { t.done=false; logEvent('undone',t); }
