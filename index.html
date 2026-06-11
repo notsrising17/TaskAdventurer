@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Task Adventurer</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#080810">
@@ -71,7 +71,7 @@
     padding:8px;display:none;gap:6px;align-items:stretch;flex-wrap:wrap;
     background:rgba(8,6,20,0.97);border-top:2px solid #4a3a8a;}
   #formPanel.open{display:flex;}
-  #formPanel input,#formPanel select{font-family:inherit;font-size:9px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:8px;outline:none;width:100%;}
+  #formPanel input,#formPanel select{font-family:inherit;font-size:16px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:8px;outline:none;width:100%;}
   #formPanel select option{background:#0d0b22;}
   .fgroup{display:flex;flex-direction:column;gap:3px;}
   .flabel{font-size:9px;color:#9a8ad0;letter-spacing:1px;}
@@ -190,7 +190,7 @@
   #editWrap{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:45;display:none;align-items:center;justify-content:center;padding:16px;}
   #editWrap.open{display:flex;}
   #editBox{width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px;padding:14px;}
-  #editBox input{font-family:inherit;font-size:10px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;}
+  #editBox input{font-family:inherit;font-size:16px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;}
   #editBox input[type=checkbox]{width:22px;height:22px;accent-color:var(--gold);}
   #editBox input:focus{border-color:var(--gold);}
   #editSave{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:1;}
@@ -205,7 +205,11 @@
   #qcWrap{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:46;display:none;align-items:flex-start;justify-content:center;padding:18vh 16px 0;}
   #qcWrap.open{display:flex;}
   #qcBox{width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px;padding:12px;}
-  #qcInput{font-family:inherit;font-size:10px;background:#070710;color:var(--text);border:2px solid var(--gold);padding:12px 8px;outline:none;width:100%;min-height:44px;}
+  #qcInput{font-family:inherit;font-size:16px;background:#070710;color:var(--text);border:2px solid var(--gold);padding:12px 8px;outline:none;width:100%;min-height:44px;}
+  #captureInput{font-family:system-ui,sans-serif;font-size:16px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:10px 8px;outline:none;flex:1;min-height:44px;}
+  #captureInput:focus{border-color:var(--gold);}
+  #captureBar{flex:0 0 auto;display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid #2a2050;background:rgba(8,6,20,.97);}
+  #captureStow{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:10px 12px;min-height:44px;cursor:pointer;letter-spacing:1px;white-space:nowrap;flex:0 0 auto;}
   /* Tavern — uncategorized storage, deliberately muted */
   .tavernGroup{opacity:.85;border-style:dashed!important;}
   .tavernGroup .task{border-left-color:#4a4060;background:rgba(10,9,24,.7);}
@@ -215,11 +219,29 @@
   #splitWrap{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:46;display:none;align-items:center;justify-content:center;padding:16px;}
   #splitWrap.open{display:flex;}
   #splitBox{width:100%;max-width:400px;display:flex;flex-direction:column;gap:8px;padding:14px;}
-  .splitInput{font-family:inherit;font-size:9px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;min-height:44px;}
+  .splitInput{font-family:system-ui,sans-serif;font-size:16px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;min-height:44px;}
   #splitSave{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:1;}
   #splitCancel{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;}
   .splitPrompt{display:flex;align-items:center;gap:6px;font-size:9px;color:#ffcc00;padding:6px 8px;border:1px dashed #8a6a20;background:rgba(255,204,0,.04);letter-spacing:1px;flex-wrap:wrap;}
   .splitPrompt button{font-family:inherit;font-size:9px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid #8a6a20;padding:8px 10px;min-height:36px;cursor:pointer;}
+
+  /* Welcome card (first-run) */
+  #welcomeWrap{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:55;display:none;align-items:center;justify-content:center;padding:16px;}
+  #welcomeWrap.open{display:flex;}
+  #welcomeBox{width:100%;max-width:440px;display:flex;flex-direction:column;gap:12px;padding:20px;}
+  .wc-title{font-size:12px;color:var(--gold);text-align:center;letter-spacing:2px;}
+  .wc-body{font-size:9px;color:var(--text);line-height:1.9;text-align:center;letter-spacing:1px;}
+  #welcomeSeedBtn{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:14px;min-height:48px;cursor:pointer;letter-spacing:1px;}
+  #welcomeEmptyBtn{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;}
+
+  /* Brain-dump modal */
+  #dumpWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:46;display:none;align-items:center;justify-content:center;padding:16px;}
+  #dumpWrap.open{display:flex;}
+  #dumpBox{width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;padding:14px;}
+  #dumpArea{font-family:system-ui,sans-serif;font-size:16px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:12px 8px;outline:none;width:100%;min-height:160px;resize:vertical;line-height:1.6;}
+  #dumpArea:focus{border-color:var(--gold);}
+  #dumpStow{font-family:inherit;font-size:10px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:1;}
+  #dumpCancel{font-family:inherit;font-size:9px;background:none;color:#9a8ad0;border:1px solid #4a3a8a;padding:12px;min-height:44px;cursor:pointer;letter-spacing:1px;flex:0 0 auto;}
 
   /* Bottom tab bar — mobile only (JRPG menu) */
   #tabBar{position:fixed;left:0;right:0;bottom:0;z-index:25;display:none;
@@ -263,7 +285,7 @@
     #statsPanel{width:100%;right:0;left:0;top:0;border-left:none;border-right:none;border-top:none;}
     .stat-name{font-size:9px;}
     #formPanel{bottom:52px;}
-    #formPanel input,#formPanel select{height:44px;font-size:9px;padding:0 8px;}
+    #formPanel input,#formPanel select{height:44px;font-size:16px;padding:0 8px;}
     .fgroup{flex:1 1 100%;}
     #fgGoal,#fgDate,#fgRepeat{flex:1 1 auto;}
     #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
@@ -324,12 +346,17 @@
 <div id="listPanel" class="hud">
   <div id="listHead">
     <span class="lbl">QUEST LOG</span>
-    <button id="formToggle" onclick="toggleForm()">＋ ADD TASK</button>
+    <button id="formToggle" onclick="toggleForm()">＋ ADD WITH DETAILS</button>
     <button id="collapseBtn">v</button>
+  </div>
+  <div id="captureBar">
+    <input type="text" id="captureInput" maxlength="60" placeholder="NEW QUEST..." enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <button id="captureStow" onclick="captureBarSubmit()">STOW</button>
+    <button id="dumpBtn" onclick="openDump()" style="font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:#9a8ad0;border:1px solid #3a3060;padding:10px;min-height:44px;cursor:pointer;white-space:nowrap;" title="Brain dump">⋮⋮</button>
   </div>
   <div id="formPanel">
     <div class="fgroup" id="fgName"><label class="flabel" for="taskName">TASK</label>
-      <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60"></div>
+      <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60" enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text"></div>
     <div class="fgroup" id="fgDomain"><label class="flabel" for="taskDomain">DOMAIN</label>
       <select id="taskDomain"></select></div>
     <div class="fgroup" id="fgType"><label class="flabel" for="taskType">TYPE</label>
@@ -427,7 +454,7 @@
 <div id="qcWrap" onclick="if(event.target===this)closeQuickCapture()">
   <div id="qcBox" class="glass">
     <div class="ck-sub">QUICK CAPTURE — STOWED IN THE TAVERN</div>
-    <input type="text" id="qcInput" maxlength="60" placeholder="WRITE IT DOWN...">
+    <input type="text" id="qcInput" maxlength="60" placeholder="WRITE IT DOWN..." enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
   </div>
 </div>
 
@@ -435,13 +462,34 @@
   <div id="splitBox" class="glass">
     <div class="ck-title">SPLIT THE BOSS FIGHT</div>
     <div class="ck-sub" id="splitName"></div>
-    <input type="text" class="splitInput" maxlength="60" placeholder="FIRST ENCOUNTER...">
-    <input type="text" class="splitInput" maxlength="60" placeholder="SECOND ENCOUNTER...">
-    <input type="text" class="splitInput" maxlength="60" placeholder="THIRD (OPTIONAL)...">
-    <input type="text" class="splitInput" maxlength="60" placeholder="FOURTH (OPTIONAL)...">
+    <input type="text" class="splitInput" maxlength="60" placeholder="FIRST ENCOUNTER..." enterkeyhint="next" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <input type="text" class="splitInput" maxlength="60" placeholder="SECOND ENCOUNTER..." enterkeyhint="next" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <input type="text" class="splitInput" maxlength="60" placeholder="THIRD (OPTIONAL)..." enterkeyhint="next" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
+    <input type="text" class="splitInput" maxlength="60" placeholder="FOURTH (OPTIONAL)..." enterkeyhint="done" autocapitalize="sentences" autocorrect="off" autocomplete="off" inputmode="text">
     <div style="display:flex;gap:6px;">
       <button id="splitSave" onclick="saveSplit()">⚔ FORGE QUESTS</button>
       <button id="splitCancel" onclick="closeSplit()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div id="welcomeWrap">
+  <div id="welcomeBox" class="glass">
+    <div class="wc-title">⚔ WELCOME, ADVENTURER</div>
+    <div class="wc-body">YOUR QUEST LOG AWAITS.<br><br>BEGIN WITH A SAMPLE CAMPAIGN TO SEE THE SYSTEM IN ACTION, OR START WITH A BLANK SLATE AND CAPTURE YOUR OWN FIRST QUEST.</div>
+    <button id="welcomeSeedBtn" onclick="welcomeSeed()">⚑ START A SAMPLE CAMPAIGN</button>
+    <button id="welcomeEmptyBtn" onclick="welcomeEmpty()">START EMPTY</button>
+  </div>
+</div>
+
+<div id="dumpWrap" onclick="if(event.target===this)closeDump()">
+  <div id="dumpBox" class="glass">
+    <div class="ck-title">BRAIN DUMP</div>
+    <div class="ck-sub">ONE QUEST PER LINE — STOWED IN THE TAVERN</div>
+    <textarea id="dumpArea" placeholder="CLEAN THE FORGE&#10;WRITE THE REPORT&#10;BUY RATIONS..." autocapitalize="sentences" autocorrect="off" autocomplete="off"></textarea>
+    <div style="display:flex;gap:6px;">
+      <button id="dumpStow" onclick="stowDump()">🍺 STOW ALL</button>
+      <button id="dumpCancel" onclick="closeDump()">CANCEL</button>
     </div>
   </div>
 </div>
@@ -609,7 +657,7 @@ const META_KEY='ta_meta';
 function metaDefaults(){
   return {tokens:0,pins:{date:'',ids:[]},lastSeen:null,camped:false,
     critMiss:0,critBonus:[0,0,0,0,0],msBase:[0,0,0,0,0],msInit:false,
-    offers:[],celebrated:'',stripDate:'',stripIds:[]};
+    offers:[],celebrated:'',stripDate:'',stripIds:[],welcomed:false};
 }
 let META=metaDefaults();
 function loadMeta(){
@@ -1484,6 +1532,94 @@ document.getElementById('qcInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'){ const v=e.target.value.trim(); if(v) quickCapture(v); }
   else if(e.key==='Escape') closeQuickCapture();
 });
+
+// ============ CAPTURE BAR (Tier 1) ============
+// Persistent one-line input pinned above the quest list. Enter submits.
+// Never auto-focused — keyboard must not pop on tab switch.
+function captureBarSubmit(){
+  const inp=document.getElementById('captureInput');
+  const v=inp.value.trim(); if(!v) return;
+  inp.value='';
+  quickCapture(v);
+}
+document.getElementById('captureInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ captureBarSubmit(); }
+});
+
+// ============ BRAIN DUMP (Tier 2) ============
+// Bulk textarea — one quest per line → all land in TAVERN.
+// classifyLines(lines) is a seam for a future LLM tier: given string[],
+// return [{name,domain,type}]. Implement as a Netlify Function proxy
+// (API key cannot ship in client JS on a public deployment).
+function classifyLines(lines){
+  return lines.map(name=>({name,domain:-1,type:T_QUEST}));
+}
+const IMPORT_CAP=100;
+function importLines(lines){
+  const clean=lines.map(l=>l.trim()).filter(Boolean);
+  const toAdd=clean.slice(0,IMPORT_CAP);
+  const skipped=clean.length-toAdd.length;
+  const classified=classifyLines(toAdd);
+  classified.forEach(({name,domain,type})=>{
+    state.tasks.push({id:Date.now()+Math.random(),name,domain,type,goal:1,
+      weekStart:mondayStr(),due:null,done:false,repeat:0,doneCount:0,snoozeCount:0});
+  });
+  recalcDerived(); save(); refresh();
+  let msg='🍺 '+toAdd.length+' QUEST'+(toAdd.length===1?'':'S')+' STOWED';
+  if(skipped>0) msg+=' ('+skipped+' SKIPPED — CAP '+IMPORT_CAP+')';
+  showToast(msg);
+}
+function openDump(){
+  document.getElementById('dumpArea').value='';
+  document.getElementById('dumpWrap').classList.add('open');
+  document.getElementById('dumpArea').focus();
+}
+function closeDump(){ document.getElementById('dumpWrap').classList.remove('open'); }
+function stowDump(){
+  const lines=document.getElementById('dumpArea').value.split('\n');
+  closeDump();
+  importLines(lines);
+}
+
+// ============ WELCOME CARD (Tier 0) ============
+const SAMPLE_TASKS=[
+  {name:'TIDY THE COMMON ROOM',domain:0,type:T_QUEST},
+  {name:'PREP MEALS FOR THE WEEK',domain:0,type:T_QUEST},
+  {name:'REPLY TO ALL GUILD MESSAGES',domain:1,type:T_QUEST},
+  {name:'DRAFT THE WEEKLY REPORT',domain:1,type:T_QUEST},
+  {name:'MORNING WALK — 20 MIN',domain:2,type:T_HABIT,goal:5},
+  {name:'DRINK 8 CUPS OF WATER',domain:2,type:T_HABIT,goal:7},
+  {name:'SKETCH OR WRITE FOR 15 MIN',domain:3,type:T_HABIT,goal:3},
+  {name:'REACH OUT TO A FRIEND',domain:4,type:T_QUEST},
+  {name:'PLAN NEXT SOCIAL OUTING',domain:4,type:T_QUEST},
+];
+function seedTask({name,domain,type,goal}){
+  const ti=type||T_QUEST;
+  const base={id:Date.now()+Math.random(),name,domain,type:ti,goal:goal||1,
+    weekStart:mondayStr(),due:null,done:false,repeat:0,doneCount:0,snoozeCount:0};
+  const extra=ti===T_HABIT?{dailyCap:true,weekCount:0,weeklyHits:0,wkStreak:0,lastDone:null}:{};
+  state.tasks.push(Object.assign(base,extra));
+}
+function seedSampleCampaign(){
+  SAMPLE_TASKS.forEach(t=>seedTask(t));
+  recalcDerived(); save(); refresh();
+}
+function bootWelcome(){
+  if(META.welcomed) return;
+  if(state.tasks.length>0){ META.welcomed=true; saveMeta(); return; }
+  document.getElementById('welcomeWrap').classList.add('open');
+}
+function closeWelcome(){ document.getElementById('welcomeWrap').classList.remove('open'); }
+function welcomeSeed(){
+  META.welcomed=true; saveMeta();
+  closeWelcome();
+  seedSampleCampaign();
+  showToast('⚑ SAMPLE CAMPAIGN READY!','#44cc44');
+}
+function welcomeEmpty(){
+  META.welcomed=true; saveMeta();
+  closeWelcome();
+}
 // Classify: a one-tap domain picker per tavern row
 function classifyTask(id,di){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
@@ -2368,7 +2504,7 @@ document.getElementById('collapseBtn').onclick=()=>{
 function toggleForm(){
   const fp=document.getElementById('formPanel'),btn=document.getElementById('formToggle');
   const open=fp.classList.toggle('open');
-  btn.textContent=open?'✕ CANCEL':'＋ ADD TASK';
+  btn.textContent=open?'✕ CANCEL':'＋ ADD WITH DETAILS';
   btn.classList.toggle('up',open);
   if(open) document.getElementById('taskName').focus();
 }
@@ -2794,6 +2930,7 @@ document.getElementById('heroNameDisplay').textContent=state.name;
 updateFormFields();
 initNotifUI();
 switchTab('QUESTS');
+bootWelcome(); // first-run welcome card (only when no tasks exist)
 bootRitual(); // re-entry ritual decides before the user sees the list
 // Check overdue alerts on launch (daily report reminder fires at the scheduled minute)
 setTimeout(checkScheduledNotifs,2000);

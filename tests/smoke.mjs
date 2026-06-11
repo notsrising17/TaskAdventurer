@@ -179,7 +179,11 @@ r = await page.evaluate(() => {
 check('strip: clearing all items fires the daily celebration once', r.cel === true, JSON.stringify(r));
 
 // ---------- 7. quick capture + tavern ----------
-await page.evaluate(() => { localStorage.clear(); localStorage.setItem('ta_version', '4'); });
+await page.evaluate(() => {
+  localStorage.clear();
+  localStorage.setItem('ta_version', '4');
+  localStorage.setItem('ta_meta', JSON.stringify({ welcomed: true }));
+});
 await page.reload();
 await page.click('#qcFab');
 await page.fill('#qcInput', 'buy a lute');
@@ -208,6 +212,7 @@ check('capture: one-tap classify moves item to a domain', r === 3);
 // ---------- 8. boss-fight split ----------
 await page.evaluate(() => {
   localStorage.clear(); localStorage.setItem('ta_version', '4');
+  localStorage.setItem('ta_meta', JSON.stringify({ welcomed: true }));
   localStorage.setItem('ta_tasks', JSON.stringify([{ id: 7, name: 'TAXES', domain: 1, type: 0, done: false, due: null, snoozeCount: 3 }]));
 });
 await page.reload();
@@ -287,6 +292,77 @@ r = await page.evaluate(({ mon }) => {
 }, { mon: await page.evaluate(() => mondayStr()) });
 check('export/import: old v2 payload migrates (target→habit, weekLog, msBase)',
   r.type === 1 && r.cap === false && r.wc === 3 && r.weekLog && r.msBase === '0,0,0,0,1', JSON.stringify(r));
+
+// ---------- welcome card + sample campaign ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+r = await page.evaluate(() => ({
+  visible: document.getElementById('welcomeWrap').classList.contains('open'),
+  welcomed: META.welcomed,
+}));
+check('welcome: card shown on first run (empty storage)', r.visible, JSON.stringify(r));
+check('welcome: welcomed flag still false before choice', !r.welcomed, JSON.stringify(r));
+
+// choose sample campaign
+await page.evaluate(() => welcomeSeed());
+r = await page.evaluate(() => {
+  const doms = [...new Set(state.tasks.map(t => t.domain))];
+  return { count: state.tasks.length, welcomed: META.welcomed, visible: document.getElementById('welcomeWrap').classList.contains('open'), uniqueDomains: doms.length };
+});
+check('welcome: card dismissed after seed', !r.visible, JSON.stringify(r));
+check('welcome: welcomed flag set', r.welcomed, JSON.stringify(r));
+check('welcome: sample tasks created', r.count >= 5, r.count);
+check('welcome: tasks span multiple domains', r.uniqueDomains >= 3, r.uniqueDomains);
+
+// not shown again for existing users
+await page.reload();
+r = await page.evaluate(() => document.getElementById('welcomeWrap').classList.contains('open'));
+check('welcome: not shown again after welcomed=true', !r, r);
+
+// start empty path
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+await page.evaluate(() => welcomeEmpty());
+r = await page.evaluate(() => ({ welcomed: META.welcomed, count: state.tasks.length }));
+check('welcome: empty path sets welcomed flag', r.welcomed, JSON.stringify(r));
+check('welcome: empty path leaves zero tasks', r.count === 0, r.count);
+
+// ---------- importLines / brain dump ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+r = await page.evaluate(() => {
+  const before = state.tasks.length;
+  importLines(['FORGE A SWORD', '', 'TRAIN THE MILITIA', '   ', 'SCOUT THE PASS']);
+  return { added: state.tasks.length - before, allTavern: state.tasks.every(t => t.domain === -1) };
+});
+check('importLines: blanks skipped, correct count added', r.added === 3, r.added);
+check('importLines: all land in tavern', r.allTavern, r.allTavern);
+
+// cap at 100
+r = await page.evaluate(() => {
+  state.tasks = [];
+  const lines = Array.from({ length: 150 }, (_, i) => 'TASK ' + i);
+  importLines(lines);
+  return state.tasks.length;
+});
+check('importLines: capped at 100 tasks from 150 lines', r === 100, r);
+
+// ---------- captureBar quick capture ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); META.welcomed = true; saveMeta(); });
+await page.reload();
+r = await page.evaluate(() => {
+  const inp = document.getElementById('captureInput');
+  inp.value = 'LIGHT THE SIGNAL FIRE';
+  captureBarSubmit();
+  const t = state.tasks[state.tasks.length - 1];
+  return { name: t.name, domain: t.domain, input: inp.value };
+});
+check('captureBar: task created in tavern', r.domain === -1, JSON.stringify(r));
+check('captureBar: input cleared after submit', r.input === '', r.input);
 
 // ---------- wrap up ----------
 check('zero page errors across all scenarios', errors.length === 0, errors.join(' | '));
