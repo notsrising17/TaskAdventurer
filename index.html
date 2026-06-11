@@ -19,13 +19,19 @@
   .glass{background:rgba(10,8,28,0.88);border:2px solid var(--gold);
     box-shadow:0 0 16px rgba(0,0,0,.7),inset 0 0 14px rgba(0,0,0,.5);backdrop-filter:blur(2px);}
 
-  /* Portrait */
-  #portraitPanel{top:10px;left:10px;width:150px;padding:6px;display:flex;flex-direction:column;align-items:center;}
-  #portraitImg{width:136px;height:175px;object-fit:cover;object-position:center top;display:block;}
-  .nameplate{margin-top:5px;font-size:7px;color:var(--gold);letter-spacing:1px;}
+  /* Portrait column */
+  #portraitCol{position:fixed;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:5;}
+  .portCard{width:64px;display:flex;flex-direction:column;align-items:center;padding:4px;cursor:pointer;
+    border:1px solid #2a2050;background:rgba(10,8,28,.85);transition:border-color .2s;}
+  .portCard:hover,.portCard.active{border-color:var(--gold);}
+  .portImg{width:56px;height:70px;object-fit:cover;object-position:center top;display:block;image-rendering:pixelated;}
+  .portCanvas{width:56px;height:70px;display:block;image-rendering:pixelated;}
+  .portName{font-size:4px;color:var(--gold);letter-spacing:.5px;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;width:100%;text-overflow:ellipsis;}
+  .portHPWrap{width:100%;height:3px;background:#070710;margin-top:2px;}
+  .portHPFill{height:100%;transition:width .3s,background-color .3s;}
 
-  /* Stats */
-  #statsPanel{top:10px;right:10px;width:200px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  /* Stats — move right, shrink slightly since portraits take left */
+  #statsPanel{top:10px;right:10px;width:188px;padding:10px;display:flex;flex-direction:column;gap:8px;}
   .stat-label{font-size:6px;color:#9a8ad0;}
   .stat-name{font-size:10px;color:var(--gold);cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s;}
   .stat-name:hover{border-bottom-color:var(--gold);}
@@ -42,7 +48,7 @@
   /* Domain bars */
   #domainBars{display:flex;flex-direction:column;gap:3px;}
   .drow{display:flex;align-items:center;gap:5px;}
-  .dlabel{font-size:5px;flex:0 0 42px;text-align:right;letter-spacing:.5px;}
+  .dlabel{font-size:5px;flex:0 0 44px;text-align:right;letter-spacing:.5px;}
   .dbarwrap{flex:1;height:6px;background:#070710;border:1px solid #2a2050;}
   .dbar{height:100%;transition:width .4s,background-color .4s;}
 
@@ -128,9 +134,11 @@
   #reviveBtn{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:12px;cursor:pointer;}
 
   @media(max-width:600px){
-    #portraitPanel{width:86px;padding:4px;}#portraitImg{width:76px;height:100px;}
-    .nameplate{font-size:5px;margin-top:3px;}
-    #statsPanel{width:calc(100% - 106px);right:0;top:0;padding:8px 10px;gap:6px;border-top:none;border-right:none;}
+    #portraitCol{top:6px;left:6px;gap:3px;}
+    .portCard{width:46px;padding:3px;}
+    .portImg,.portCanvas{width:40px;height:52px;}
+    .portName{font-size:3px;}
+    #statsPanel{width:calc(100% - 64px);right:0;top:0;padding:8px 10px;gap:6px;border-top:none;border-right:none;}
     .stat-name{font-size:8px;}
     #formPanel{left:0;right:0;bottom:calc(40vh + 10px);transform:none;width:100%;max-width:none;border-left:none;border-right:none;padding:8px 10px;flex-direction:column;gap:6px;}
     #formPanel.collapsed{bottom:48px;}
@@ -147,10 +155,7 @@
 <div id="mapWrap"><canvas id="mapCanvas"></canvas></div>
 <div id="vignette"></div>
 
-<div id="portraitPanel" class="hud glass">
-  <img id="portraitImg" alt="Hero">
-  <div class="nameplate" id="portraitName">HERO</div>
-</div>
+<div id="portraitCol"></div>
 
 <div id="statsPanel" class="hud glass">
   <div>
@@ -223,19 +228,75 @@
 // ============ DOMAINS ============
 // Each domain = a life area with a unit that marches toward its objective town
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:5,  spawnTy:7,  targetTx:2,  targetTy:1 },
-  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:13, spawnTy:7,  targetTx:14, targetTy:1 },
-  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:5,  spawnTy:9,  targetTx:2,  targetTy:11},
-  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:10, spawnTy:8,  targetTx:9,  targetTy:3 },
-  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:13, spawnTy:9,  targetTx:16, targetTy:10},
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', spawnTx:5,  spawnTy:7,  targetTx:2,  targetTy:1,
+   portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png']},
+  {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', spawnTx:13, spawnTy:7,  targetTx:14, targetTy:1,  portraits:null},
+  {name:'HEALTH',     cls:'FIGHTER',  dest:'FITLANTIS',      color:'#44aa55', dark:'#1a5a1a', spawnTx:5,  spawnTy:9,  targetTx:2,  targetTy:11, portraits:null},
+  {name:'CREATIVITY', cls:'BARD',     dest:'DISCOTECA',      color:'#cc44aa', dark:'#7a1a6a', spawnTx:10, spawnTy:8,  targetTx:9,  targetTy:3,  portraits:null},
+  {name:'SOCIAL',     cls:'ROGUE',    dest:"ROBBER BARON'S", color:'#2288aa', dark:'#1a4a6a', spawnTx:13, spawnTy:9,  targetTx:16, targetTy:10, portraits:null},
 ];
 
 const T_QUEST = 0, T_HABIT = 1, T_TARGET = 2;
 
 // ============ PORTRAITS ============
-const PORTRAIT_SRCS = ['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'];
 const spriteImg = new Image(); spriteImg.src = 'wizard_sprite_16bit.png';
-function updatePortrait(){ document.getElementById('portraitImg').src = PORTRAIT_SRCS[hpLevel()]; }
+// Preload portrait images per domain
+const domainPortraitImgs = DOMAINS.map(d => d.portraits ? d.portraits.map(src=>{ const i=new Image(); i.src=src; return i; }) : null);
+
+function buildPortraitCol(){
+  const col=document.getElementById('portraitCol');
+  DOMAINS.forEach((d,i)=>{
+    const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
+    card.onclick=()=>openFocus(i);
+    if(d.portraits){
+      const img=document.createElement('img'); img.className='portImg'; img.id='portImg'+i; img.alt=d.cls;
+      img.src=d.portraits[0]; card.appendChild(img);
+    } else {
+      const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=56; cv.height=70;
+      drawPortraitPlaceholder(cv,d,0); card.appendChild(cv);
+    }
+    const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; card.appendChild(nm);
+    const hw=document.createElement('div'); hw.className='portHPWrap';
+    const hf=document.createElement('div'); hf.className='portHPFill'; hf.id='portHP'+i; hw.appendChild(hf); card.appendChild(hw);
+    col.appendChild(card);
+  });
+}
+
+function drawPortraitPlaceholder(cv,d,lvl){
+  const g=cv.getContext('2d'),w=cv.width,h=cv.height;
+  g.clearRect(0,0,w,h);
+  // Background gradient
+  const bg=g.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,d.dark+'cc'); bg.addColorStop(1,'#0a0818cc');
+  g.fillStyle=bg; g.fillRect(0,0,w,h);
+  // Class icon — large centered letter
+  g.fillStyle=d.color+'aa'; g.font='bold 28px monospace'; g.textAlign='center'; g.textBaseline='middle';
+  const icons={'WIZARD':'⚗','MERCHANT':'⚖','FIGHTER':'⚔','BARD':'♪','ROGUE':'🗡'};
+  g.fillText(icons[d.cls]||d.cls[0],w/2,h/2-6);
+  // HP state indicator
+  const stateLabels=['OK','LOW','HURT','CRIT'];
+  g.font='bold 6px monospace'; g.fillStyle=STATUS_COLOR[lvl]; g.textBaseline='bottom';
+  g.fillText(stateLabels[lvl],w/2,h-3);
+  // Border glow
+  if(lvl>=2){ g.strokeStyle=STATUS_COLOR[lvl]+'66'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2); }
+}
+
+function updatePortraits(){
+  DOMAINS.forEach((d,i)=>{
+    const hp=domainHP(i),lvl=hpLevelOf(hp);
+    // Update image or canvas
+    if(d.portraits){
+      const img=document.getElementById('portImg'+i); if(img) img.src=d.portraits[Math.min(lvl,3)];
+    } else {
+      const cv=document.getElementById('portImg'+i); if(cv) drawPortraitPlaceholder(cv,d,lvl);
+    }
+    // Update HP bar
+    const hf=document.getElementById('portHP'+i); if(hf){ hf.style.width=hp+'%'; hf.style.backgroundColor=hpColor(hp); }
+    // Active state if focus open
+    const card=document.getElementById('pc'+i); if(card) card.classList.toggle('active',focusIdx===i);
+  });
+}
+function updatePortrait(){ updatePortraits(); }
 
 // ============ DATE HELPERS ============
 function todayStr(){ return new Date().toISOString().split('T')[0]; }
@@ -336,7 +397,7 @@ function renderStats(){
 }
 
 // ============ NAME EDITING ============
-function applyName(val){ val=(val||'').trim().toUpperCase().slice(0,12)||'HERO'; state.name=val; document.getElementById('heroNameDisplay').textContent=val; document.getElementById('portraitName').textContent=val; save(); }
+function applyName(val){ val=(val||'').trim().toUpperCase().slice(0,12)||'HERO'; state.name=val; document.getElementById('heroNameDisplay').textContent=val; save(); }
 document.getElementById('heroNameDisplay').onclick=()=>{ document.getElementById('heroNameDisplay').style.display='none'; const inp=document.getElementById('heroNameInput'); inp.value=state.name; inp.style.display='block'; inp.focus(); inp.select(); };
 document.getElementById('heroNameInput').addEventListener('blur',()=>{ applyName(document.getElementById('heroNameInput').value); document.getElementById('heroNameInput').style.display='none'; document.getElementById('heroNameDisplay').style.display=''; });
 document.getElementById('heroNameInput').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key==='Escape') document.getElementById('heroNameInput').blur(); });
@@ -420,14 +481,48 @@ let sparkles=[];
 
 function buildMap(){
   const m=[]; for(let y=0;y<ROWS;y++){const r=[];for(let x=0;x<COLS;x++)r.push(0);m.push(r);}
-  for(let x=0;x<COLS;x++) m[6][x]=1;
-  for(let y=0;y<ROWS;y++) if(m[y][9]===0) m[y][9]=1;
-  for(let y=1;y<=11;y++) if(m[y][2]===0) m[y][2]=1;
-  for(let y=1;y<=6;y++) if(m[y][14]===0) m[y][14]=1;
-  for(let y=6;y<=10;y++) if(m[y][16]===0) m[y][16]=1;
-  for(let x=9;x<=16;x++) if(m[10][x]===0) m[10][x]=1;
+  const path=(y,x)=>{ if(m[y]&&m[y][x]===0) m[y][x]=1; };
+
+  // Central crossroads (9,6)
+  for(let x=0;x<16;x++) m[6][x]=1;          // row 6 east-west spine
+  for(let y=0;y<ROWS;y++) path(y,9);         // col 9 north-south spine
+
+  // HOME (Wizard) spawn(5,7) → dest(2,1):
+  // crossroads → west col5 south → row7 west → col2 north to dest
+  for(let y=6;y<=7;y++) path(y,5);           // col 5 rows 6-7
+  for(let x=2;x<=5;x++) path(7,x);           // row 7 west
+  for(let y=1;y<=7;y++) path(y,2);           // col 2 up to dest
+
+  // WORK (Merchant) spawn(13,7) → dest(14,1):
+  // crossroads → east row6 → col13 south → step east → col14 north to dest
+  for(let y=6;y<=7;y++) path(y,13);          // col 13 rows 6-7
+  path(7,14);                                  // step east to col 14
+  for(let y=1;y<=7;y++) path(y,14);          // col 14 up to dest
+
+  // HEALTH (Fighter) spawn(5,9) → dest(2,11):
+  // shared col5 → continue south → row9 west → col2 south to dest
+  for(let y=6;y<=9;y++) path(y,5);           // col 5 rows 6-9 (extends HOME branch)
+  for(let x=2;x<=5;x++) path(9,x);           // row 9 west
+  for(let y=7;y<=11;y++) path(y,2);          // col 2 south to dest
+
+  // CREATIVITY (Bard) spawn(10,8) → dest(9,3):
+  // col9 spine covers this entirely; just add spawn connector
+  path(8,10);                                  // spawn step west to col9
+
+  // SOCIAL (Rogue) spawn(13,9) → dest(16,10):
+  // crossroads → east col13 south → row10 east → col16 to dest
+  for(let y=6;y<=10;y++) path(y,13);         // col 13 south (extends WORK branch)
+  for(let x=13;x<=16;x++) path(10,x);        // row 10 east
+  for(let y=4;y<=10;y++) path(y,16);         // col 16
+
+  // Water (top-right)
   for(let y=0;y<=3;y++) for(let x=16;x<COLS;x++) m[y][x]=3;
-  [[2,5],[1,12],[10,4],[4,7],[12,3],[10,12],[0,11],[11,8],[7,18],[5,0],[12,7],[3,4],[8,4],[4,12],[7,11],[3,17],[9,17],[11,5]].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
+
+  // Trees — hand-placed avoiding paths
+  [[2,5],[1,12],[10,4],[4,7],[12,3],[10,12],[0,11],[11,8],[7,18],[5,0],[12,7],[3,4],[8,4],[4,12],[7,11],[3,17],[9,17],[11,5],
+   [1,6],[3,11],[5,3],[6,18],[8,1],[8,17],[11,12],[0,6],[4,4],[12,17]
+  ].forEach(([y,x])=>{ if(m[y]&&m[y][x]===0) m[y][x]=4; });
+
   DOMAINS.forEach(d=>{ if(m[d.targetTy]&&m[d.targetTy][d.targetTx]!==3) m[d.targetTy][d.targetTx]=5; });
   return m;
 }
@@ -543,10 +638,12 @@ function drawObjective(d,captured,idx){
   } else {
     drawGenericObjective(cx,cy,d,captured);
   }
-  // label
-  mx.font='3px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
-  mx.fillStyle='rgba(0,0,0,.8)'; mx.fillText(d.name,cx+.5,cy+14.5);
-  mx.fillStyle=captured?'#ffe840':'#ff8888'; mx.fillText(d.name,cx,cy+14);
+  // destination label (two lines: dest name + class)
+  mx.font='2.5px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
+  mx.fillStyle='rgba(0,0,0,.85)'; mx.fillText(d.dest,cx+.4,cy+15.4);
+  mx.fillStyle=captured?'#ffe840':'#ff9999'; mx.fillText(d.dest,cx,cy+15);
+  mx.fillStyle='rgba(0,0,0,.7)'; mx.fillText(d.cls,cx+.3,cy+19.3);
+  mx.fillStyle=captured?d.color:'#888888'; mx.fillText(d.cls,cx,cy+19);
 }
 
 function drawHomeHQ(cx,cy,captured,d){
@@ -831,10 +928,9 @@ mc.addEventListener('click',e=>{
   }
 });
 
-buildDomainBars(); populateSelects(); drawHeart(); drawScroll();
+buildPortraitCol(); buildDomainBars(); populateSelects(); drawHeart(); drawScroll();
 fitMap(); load(); recalcHP(); save(); refresh(); updateCheckinBtn();
 document.getElementById('heroNameDisplay').textContent=state.name;
-document.getElementById('portraitName').textContent=state.name;
 updateFormFields();
 requestAnimationFrame(loop);
 setInterval(()=>{ recalcHP(); save(); refresh(); },3600*1000);
