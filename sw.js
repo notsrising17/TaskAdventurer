@@ -9,6 +9,9 @@ const SHELL = VERSION + '-shell';
 const FONTS = VERSION + '-fonts';
 const DATA  = 'ta-data-v1';
 
+// PRECACHE is passed to cache.addAll() which is atomic — one missing or
+// renamed file silently aborts the entire SW install. Verify every entry
+// exists in the deploy folder before pushing a rename or delete.
 const PRECACHE = [
   './',
   './index.html',

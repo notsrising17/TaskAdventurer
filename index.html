@@ -878,7 +878,7 @@ function checkExpeditionWeek(){
   const gold=EXPEDITION.leagues+lm*expMods().landmarkGold;
   const rested=(EXPEDITION.reps||0)===0;
   EXPEDITION.pending=rested?{rested:true}:{leagues:EXPEDITION.leagues,landmarks:lm,gold};
-  EXPEDITION.gold+=gold;
+  EXPEDITION.gold+=rested?0:gold;
   EXPEDITION.best=Math.max(EXPEDITION.best||0,EXPEDITION.leagues);
   if(!rested){
     if(!Array.isArray(EXPEDITION.runLog)) EXPEDITION.runLog=[];
