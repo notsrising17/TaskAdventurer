@@ -142,6 +142,15 @@
   #checkinBtn{font-family:inherit;font-size:5px;background:rgba(255,215,0,.08);color:var(--gold);border:1px solid #4a3060;padding:5px 8px;cursor:pointer;letter-spacing:1px;text-align:center;}
   #checkinBtn.done{color:#44cc44;border-color:#226622;background:rgba(68,204,68,.08);}
   .miniBtn{font-family:inherit;font-size:5px;background:rgba(255,215,0,.08);color:var(--gold);border:1px solid #4a3060;padding:5px 8px;cursor:pointer;letter-spacing:1px;text-align:center;flex:1;}
+
+  /* Chronicle (history view) */
+  #chronWrap{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:40;display:none;align-items:center;justify-content:center;padding:16px;}
+  #chronWrap.open{display:flex;}
+  #chronBox{width:100%;max-width:480px;max-height:86vh;display:flex;flex-direction:column;gap:8px;padding:14px;overflow-y:auto;}
+  .ch-lbl{font-size:5px;color:#9a8ad0;letter-spacing:1px;margin-top:4px;}
+  #chronGrid,#chronBars{width:100%;image-rendering:pixelated;background:#070710;border:1px solid #2a2050;}
+  .ch-row{display:flex;justify-content:space-between;font-size:6px;letter-spacing:1px;padding:3px 0;border-bottom:1px solid #1a1438;}
+  #chronClose{font-family:inherit;font-size:8px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:10px;cursor:pointer;letter-spacing:1px;flex:0 0 auto;}
   .cb{width:20px;height:20px;flex:0 0 20px;border:2px solid #4a3a8a;background:#070710;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;font-size:9px;}
   .cb.checked{background:var(--hp-green);border-color:var(--hp-green);}
   .cb.checked::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #062;border-width:0 2px 2px 0;transform:rotate(45deg);animation:pop .25s;}
@@ -242,6 +251,7 @@
     <div class="barwrap"><div class="bar" id="hpBar"></div></div>
     <div id="domainBars"></div>
     <button id="checkinBtn" onclick="showCheckin()">📋 DAILY REPORT</button>
+    <button class="miniBtn" onclick="showChronicle()" style="flex:none;width:100%;">📜 CHRONICLE</button>
     <div style="display:flex;gap:4px;align-items:center;">
       <button class="miniBtn" id="notifBtn" onclick="toggleNotifSettings()">🔔 ALERTS</button>
       <span id="notifStatus" style="font-size:5px;color:#888;letter-spacing:1px;"></span>
@@ -312,6 +322,22 @@
     <div class="ck-sub" id="checkinStreak" style="color:#44cc44;letter-spacing:1px;"></div>
     <div id="checkinList"></div>
     <button id="checkinSubmit" onclick="submitCheckin()">SUBMIT REPORT</button>
+  </div>
+</div>
+
+<div id="chronWrap" onclick="if(event.target===this)closeChronicle()">
+  <div id="chronBox" class="glass">
+    <div class="ck-title">CHRONICLE</div>
+    <div class="ck-sub" id="chronBegins"></div>
+    <div class="ch-lbl">CAMPAIGN ACTIVITY — LAST 12 WEEKS</div>
+    <canvas id="chronGrid"></canvas>
+    <div class="ch-lbl">DEEDS PER DAY — LAST 14 DAYS</div>
+    <canvas id="chronBars"></canvas>
+    <div class="ch-lbl">REPORT STREAKS</div>
+    <div id="chronStreaks"></div>
+    <div class="ch-lbl">DEEDS BY CLASS — LAST 30 DAYS</div>
+    <div id="chronTotals"></div>
+    <button id="chronClose" onclick="closeChronicle()">CLOSE</button>
   </div>
 </div>
 
@@ -577,6 +603,26 @@ function aggDailyCompletions(events,nDays){
   for(let i=0;i<nDays;i++){
     const s=localDateStr(d);
     out.push({date:s,n:Math.max(0,byDay[s]||0)});
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+
+// Like aggDailyCompletions but split per domain for stacked charts.
+// Returns [{date, n:[per-domain counts]}] oldest→newest, zero-filled.
+function aggDailyByDomain(events,nDays){
+  const byDay={};
+  events.forEach(e=>{
+    if(e.d==null||e.d<0||e.d>=DOMAINS.length) return;
+    const day=localDateStr(new Date(e.t));
+    if(!byDay[day]) byDay[day]=DOMAINS.map(()=>0);
+    if(POSITIVE_EV[e.ev]) byDay[day][e.d]++;
+    else if(UN_TWIN[e.ev]) byDay[day][e.d]--;
+  });
+  const out=[]; const d=new Date(); d.setDate(d.getDate()-(nDays-1));
+  for(let i=0;i<nDays;i++){
+    const s=localDateStr(d);
+    out.push({date:s,n:(byDay[s]||DOMAINS.map(()=>0)).map(x=>Math.max(0,x))});
     d.setDate(d.getDate()+1);
   }
   return out;
@@ -2009,6 +2055,100 @@ function submitCheckin(){
   updateCheckinBtn();
   const streak=checkinStreak();
   if(streak>1) showToast('📋 REPORT FILED — '+streak+' DAY STREAK 🔥','#44cc44');
+}
+
+// ============ CHRONICLE (history view) ============
+function showChronicle(){
+  const beg=chronicleStart(state.events,state.eventSums);
+  const begEl=document.getElementById('chronBegins');
+  begEl.textContent=beg
+    ?'CHRONICLE BEGINS '+new Date(beg+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'}).toUpperCase()
+    :'NO DEEDS RECORDED YET — GO COMPLETE SOMETHING!';
+  drawChronGrid();
+  drawChronBars();
+  renderChronStreaks();
+  renderChronTotals();
+  document.getElementById('chronWrap').classList.add('open');
+}
+function closeChronicle(){ document.getElementById('chronWrap').classList.remove('open'); }
+
+// GitHub-style contribution grid: 12 weeks × 7 days, intensity = count
+function drawChronGrid(){
+  const cv=document.getElementById('chronGrid');
+  const WEEKS=12,CELL=8,GAP=2;
+  // pad so the grid ends on today's column; rows are Sun..Sat
+  const todayDow=new Date().getDay();
+  const days=(WEEKS-1)*7+todayDow+1;
+  const data=aggDailyCompletions(state.events,days);
+  const max=Math.max(1,...data.map(x=>x.n));
+  cv.width=WEEKS*(CELL+GAP)+GAP; cv.height=7*(CELL+GAP)+GAP;
+  const g=cv.getContext('2d');
+  g.fillStyle='#070710'; g.fillRect(0,0,cv.width,cv.height);
+  // day count above makes the first cell a Sunday, so i maps straight to the grid
+  data.forEach((day,i)=>{
+    const wk=Math.floor(i/7), dow=i%7;
+    const x=GAP+wk*(CELL+GAP), y=GAP+dow*(CELL+GAP);
+    if(day.n===0){ g.fillStyle='#16122a'; }
+    else{
+      const a=.25+.75*(day.n/max);
+      g.fillStyle='rgba(255,215,0,'+a.toFixed(2)+')';
+    }
+    g.fillRect(x,y,CELL,CELL);
+  });
+}
+
+// Stacked bar chart: deeds per day for 14 days, colored by domain
+function drawChronBars(){
+  const cv=document.getElementById('chronBars');
+  const N=14,BAR=26,GAP=6,H=110,PADB=14;
+  const data=aggDailyByDomain(state.events,N);
+  const max=Math.max(1,...data.map(d=>d.n.reduce((a,b)=>a+b,0)));
+  cv.width=N*(BAR+GAP)+GAP; cv.height=H+PADB;
+  const g=cv.getContext('2d');
+  g.fillStyle='#070710'; g.fillRect(0,0,cv.width,cv.height);
+  g.font='7px monospace'; g.textAlign='center';
+  data.forEach((day,i)=>{
+    const x=GAP+i*(BAR+GAP);
+    let y=H;
+    day.n.forEach((cnt,di)=>{
+      if(!cnt) return;
+      const h=Math.max(2,Math.round(cnt/max*(H-12)));
+      y-=h;
+      g.fillStyle=DOMAINS[di].color;
+      g.fillRect(x,y,BAR,h);
+    });
+    const tot=day.n.reduce((a,b)=>a+b,0);
+    if(tot){ g.fillStyle='#cbb8ff'; g.fillText(String(tot),x+BAR/2,y-3); }
+    // weekday initial under each bar
+    g.fillStyle='#665a90';
+    g.fillText('SMTWTFS'[new Date(day.date+'T12:00:00').getDay()],x+BAR/2,H+11);
+  });
+}
+
+function renderChronStreaks(){
+  const st=reportStreaks(loadCheckinDates());
+  const el=document.getElementById('chronStreaks');
+  el.innerHTML='';
+  [['CURRENT STREAK',st.current+(st.current===1?' DAY':' DAYS')+(st.current>1?' 🔥':'')],
+   ['BEST STREAK',st.best+(st.best===1?' DAY':' DAYS')]].forEach(([k,v])=>{
+    const row=document.createElement('div'); row.className='ch-row';
+    const a=document.createElement('span'); a.textContent=k; a.style.color='#9a8ad0';
+    const b=document.createElement('span'); b.textContent=v; b.style.color='var(--gold)';
+    row.appendChild(a); row.appendChild(b); el.appendChild(row);
+  });
+}
+
+function renderChronTotals(){
+  const from=new Date(); from.setDate(from.getDate()-29);
+  const totals=aggDomainTotals(state.events,localDateStr(from),todayStr());
+  const el=document.getElementById('chronTotals');
+  el.innerHTML='';
+  DOMAINS.forEach((d,i)=>{
+    const row=document.createElement('div'); row.className='ch-row';
+    const a=document.createElement('span'); a.textContent=d.cls+' — '+d.name; a.style.color=d.color;
+    const b=document.createElement('span'); b.textContent=String(totals[i]); b.style.color='#cbb8ff';
+    row.appendChild(a); row.appendChild(b); el.appendChild(row);
+  });
 }
 
 // ============ NOTIFICATIONS ============
