@@ -28,6 +28,11 @@
     padding:10px 14px;letter-spacing:1px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;
     box-shadow:0 0 16px rgba(0,0,0,.6);white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  /* Critical hit flash — brief gold pulse over everything */
+  #critFlash{position:fixed;inset:0;pointer-events:none;z-index:70;opacity:0;background:radial-gradient(ellipse at center,rgba(255,215,0,.35) 0%,rgba(255,215,0,0) 70%);}
+  #critFlash.go{animation:critpulse .5s steps(4);}
+  @keyframes critpulse{0%{opacity:0;}25%{opacity:1;}50%{opacity:.3;}75%{opacity:.8;}100%{opacity:0;}}
+  @media(prefers-reduced-motion:reduce){#critFlash.go{animation:none;opacity:0;}}
   .glass{background:rgba(10,8,28,0.88);border:2px solid var(--gold);
     box-shadow:0 0 16px rgba(0,0,0,.7),inset 0 0 14px rgba(0,0,0,.5);backdrop-filter:blur(2px);}
 
@@ -314,6 +319,7 @@
   </div>
 </div>
 <div id="toast"></div>
+<div id="critFlash"></div>
 
 <div id="listPanel" class="hud">
   <div id="listHead">
@@ -875,7 +881,8 @@ function habitGoalHits(t){
   return (t.weeklyHits||0)+Math.floor((t.weekCount||0)/(t.goal||1));
 }
 
-// Progress: quest done=1, recurring quest completions=1 each, habit goal-hits=1 each
+// Progress: quest done=1, recurring quest completions=1 each, habit goal-hits=1
+// each, plus banked critical-hit bonuses (crits never touch weekly goal math)
 function countDomainProgress(idx){
   const tasks=state.tasks.filter(t=>(t.domain||0)===idx);
   let s=0;
@@ -883,23 +890,36 @@ function countDomainProgress(idx){
     if(t.type===T_QUEST) s+=t.repeat>0?(t.doneCount||0):(t.done?1:0);
     else if(t.type===T_HABIT) s+=habitGoalHits(t);
   });
-  return s;
+  return s+((META.critBonus&&META.critBonus[idx])||0);
 }
 // Each milestone costs a fixed amount of progress per domain. Currently
 // derived from the map path length, but milestone logic must only touch
 // tile data through this constant so Phase 2 can re-derive it pathlessly.
 const MILESTONE_COST=DOMAIN_TILES.map(t=>t.length);
-// Campaigns: each milestone costs one full MILESTONE_COST of progress
-function domainProgress(idx){
+// Cheap early milestones: in a fresh domain the first costs a third, the
+// second two thirds, full price after. Domains that already held milestones
+// at migration (msBase) keep paying full price — the lookup is forward-only.
+function milestoneCostFor(idx,tier){
+  const c=MILESTONE_COST[idx];
+  if(((META.msBase&&META.msBase[idx])||0)>0) return c;
+  if(tier===0) return Math.ceil(c/3);
+  if(tier===1) return Math.ceil(2*c/3);
+  return c;
+}
+function milestoneSpent(idx){
   const tier=(state.milestones&&state.milestones[idx])||0;
-  const cost=MILESTONE_COST[idx];
-  const net=countDomainProgress(idx)-tier*cost;
-  return Math.max(0,Math.min(1,net/cost));
+  let s=0; for(let k=0;k<tier;k++) s+=milestoneCostFor(idx,k);
+  return s;
+}
+function nextMilestoneCost(idx){ return milestoneCostFor(idx,(state.milestones&&state.milestones[idx])||0); }
+// Campaigns: progress toward the next milestone at its tier price
+function domainProgress(idx){
+  const net=countDomainProgress(idx)-milestoneSpent(idx);
+  return Math.max(0,Math.min(1,net/nextMilestoneCost(idx)));
 }
 function domainCurrentProgress(idx){
-  const tier=(state.milestones&&state.milestones[idx])||0;
-  const cost=MILESTONE_COST[idx];
-  return Math.max(0,Math.min(cost,countDomainProgress(idx)-tier*cost));
+  const net=countDomainProgress(idx)-milestoneSpent(idx);
+  return Math.max(0,Math.min(nextMilestoneCost(idx),net));
 }
 function getDomainPendingTasks(idx){
   return state.tasks.filter(t=>{
@@ -1335,7 +1355,7 @@ function renderList(){
     }
     // 2. Sub-line: destination + progress
     const sub=document.createElement('div'); sub.className='dgSub';
-    sub.textContent=d.dest+' · '+domainCurrentProgress(di)+' of '+MILESTONE_COST[di];
+    sub.textContent=d.dest+' · '+domainCurrentProgress(di)+' of '+nextMilestoneCost(di);
     grp.appendChild(sub);
     // 3. Journey strip (tap → focus panel)
     const strip=document.createElement('canvas'); strip.className='dgStrip'; strip.height=58;
@@ -1503,6 +1523,26 @@ function addTask(name,domain,type,goal,due,repeat,dailyCap){
     setTimeout(()=>showToast('COMPLETE QUESTS TO MARCH YOUR PARTY ONWARD!'),2600);
   }
 }
+// ============ CRITICAL HITS ============
+// ~10% of completions land a CRIT: +1 bonus milestone progress for the
+// domain (weekly goal counts are untouched, so goal math stays predictable).
+// Fairness guard: never more than 15 completions without a crit.
+function rollCrit(t){
+  if(!t||isTavern(t)) return;
+  META.critMiss=(META.critMiss||0)+1;
+  if(META.critMiss<15&&Math.random()>=0.10){ saveMeta(); return; }
+  META.critMiss=0;
+  const di=t.domain||0;
+  if(!META.critBonus) META.critBonus=DOMAINS.map(()=>0);
+  META.critBonus[di]=(META.critBonus[di]||0)+1;
+  saveMeta();
+  setTimeout(()=>showToast('💥 CRITICAL HIT! DOUBLE PROGRESS!','#ffd700'),350);
+  if(!REDUCED_MOTION){
+    const f=document.getElementById('critFlash');
+    f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+    sparkleAt(unitPos[di].x,unitPos[di].y);
+  }
+}
 function toggleTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   const d=DOMAINS[t.domain||0]||DOMAINS[0]; // tavern items have no domain
@@ -1518,6 +1558,7 @@ function toggleTask(id){
       t.weekCount=(t.weekCount||0)+1;
       t.lastDone=todayStr();
       logEvent('habit',t);
+      rollCrit(t);
       sparkleAt(unitPos[t.domain||0].x,unitPos[t.domain||0].y);
       // Goal hit this week — big reward
       if(!wasGoalMet&&habitGoalMet(t)){
@@ -1536,12 +1577,13 @@ function toggleTask(id){
       t.doneCount=(t.doneCount||0)+1;
       t.lastDone=todayStr(); // lets the TODAY strip see today's completion
       logEvent('done',t);
+      rollCrit(t);
       const base=(t.due&&t.due>=todayStr())?t.due:null;
       t.due=advanceDue(base,t.repeat);
       sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
       showToast('↻ QUEST COMPLETE — RETURNS '+fmtDue(t.due)+'!',d.color);
     }
-    else if(!t.done){ t.done=true; logEvent('done',t); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
+    else if(!t.done){ t.done=true; t.lastDone=todayStr(); logEvent('done',t); rollCrit(t); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
     else { t.done=false; logEvent('undone',t); }
   }
   recalcDerived();save();refresh();
@@ -2388,7 +2430,7 @@ function renderFocusPanel(){
   document.getElementById('focusCls').textContent=d.cls+' CLASS';
   document.getElementById('focusName').textContent=d.name; document.getElementById('focusName').style.color=d.color;
   document.getElementById('focusDest').textContent='► '+d.dest;
-  const fstep=domainCurrentProgress(focusIdx),ftot=MILESTONE_COST[focusIdx];
+  const fstep=domainCurrentProgress(focusIdx),ftot=nextMilestoneCost(focusIdx);
   const caps=(state.milestones&&state.milestones[focusIdx])||0;
   document.getElementById('focusStep').textContent='PROGRESS '+fstep+'/'+ftot+(caps>0?'  ★'.repeat(Math.min(caps,5)):'');
   const fs=document.getElementById('focusStatus'); fs.innerHTML=''; fs.appendChild(statusChip(focusIdx));
@@ -2423,41 +2465,21 @@ function loadCheckinDates(){
 }
 function saveCheckinDates(dates){ localStorage.setItem('ta_checkin',JSON.stringify(dates)); }
 function checkinDone(){ return loadCheckinDates().includes(todayStr()); }
-function checkinStreak(){
-  const dates=loadCheckinDates().slice().sort().reverse();
-  if(!dates.length) return 0;
-  let streak=0;
-  let d=new Date(); d.setHours(0,0,0,0);
-  // allow streak to count if today not yet reported (check from yesterday)
-  const todayInclusive=dates.includes(localDateStr(d));
-  if(!todayInclusive){
-    // yesterday must be in dates to have an ongoing streak
-    d.setDate(d.getDate()-1);
-  }
-  for(let i=0;i<365;i++){
-    const s=localDateStr(d);
-    if(dates.includes(s)){ streak++; d.setDate(d.getDate()-1); }
-    else break;
-  }
-  return streak;
-}
+// The report is consequence-free: no streaks, no absence tracking — filing
+// is its own small reward
 function updateCheckinBtn(){
   const btn=document.getElementById('checkinBtn'); if(!btn) return;
   const done=checkinDone();
-  const streak=checkinStreak();
-  if(done){
-    btn.textContent=streak>1?'✓ '+streak+'🔥 DAY STREAK':'✓ REPORTED TODAY';
-  } else {
-    btn.textContent=streak>0?'📋 REPORT ('+streak+'🔥)':'📋 DAILY REPORT';
-  }
+  btn.textContent=done?'✓ REPORTED TODAY':'📋 DAILY REPORT';
   btn.classList.toggle('done',done);
 }
 function showCheckin(){
   const wrap=document.getElementById('checkinWrap');
   document.getElementById('checkinDate').textContent=new Date().toDateString().toUpperCase();
-  const streak=checkinStreak();
-  const el=document.getElementById('checkinStreak');
-  if(el) el.textContent=streak>0?streak+' DAY STREAK 🔥':'';
+  document.getElementById('checkinStreak').textContent='';
+  document.querySelector('#checkinBox .ck-title').textContent='DAILY REPORT';
+  document.getElementById('checkinSubmit').textContent='SUBMIT REPORT';
+  document.getElementById('checkinSubmit').onclick=submitCheckin;
   renderCheckin();
   wrap.classList.add('open');
 }
@@ -2480,10 +2502,52 @@ function submitCheckin(){
   const today=todayStr();
   if(!dates.includes(today)){ dates.push(today); logEvent('report'); }
   saveCheckinDates(dates);
-  document.getElementById('checkinWrap').classList.remove('open');
   updateCheckinBtn();
-  const streak=checkinStreak();
-  if(streak>1) showToast('📋 REPORT FILED — '+streak+' DAY STREAK 🔥','#44cc44');
+  showToast('📋 REPORT FILED — +XP!','#44cc44');
+  if(!REDUCED_MOTION) DOMAINS.forEach((_,i)=>sparkleAt(unitPos[i].x,unitPos[i].y));
+  showPickStep();
+}
+// Final report step: tap up to 3 encounters to pin to the TODAY strip.
+// One-tap skippable; selections are pins for the current date only.
+function showPickStep(){
+  const list=document.getElementById('checkinList'); list.innerHTML='';
+  document.querySelector('#checkinBox .ck-title').textContent="PICK TODAY'S ENCOUNTERS";
+  document.getElementById('checkinStreak').textContent='TAP UP TO 3 TO PIN — OR SKIP';
+  const today=todayStr();
+  const weekEnd=advanceDue(null,daysLeftInWeek()-1);
+  const seen=new Set();
+  const cands=[];
+  stripCandidates().forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); cands.push(t); } });
+  state.tasks.filter(t=>!isTavern(t)&&!hasChildren(t)&&t.type===T_QUEST&&!t.done&&t.due&&t.due>today&&t.due<=weekEnd)
+    .forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); cands.push(t); } });
+  const picked=new Set();
+  if(!cands.length){
+    list.innerHTML='<div class="empty">ALL CLEAR — THE PARTY RESTS</div>';
+  }
+  cands.forEach(t=>{
+    const row=document.createElement('div'); row.className='task domain-'+Math.max(0,t.domain||0);
+    row.style.cursor='pointer';
+    const nm=document.createElement('div'); nm.className='tname'; nm.textContent=t.name;
+    const badge=document.createElement('div'); badge.className='badge due'; badge.textContent='';
+    row.appendChild(nm); row.appendChild(badge);
+    row.onclick=()=>{
+      if(picked.has(t.id)){ picked.delete(t.id); badge.textContent=''; row.style.borderColor='#2a2050'; }
+      else if(picked.size<3){ picked.add(t.id); badge.textContent='📌 PINNED'; row.style.borderColor='var(--gold)'; }
+    };
+    a11y(row,'Pin to today: '+t.name);
+    list.appendChild(row);
+  });
+  const btn=document.getElementById('checkinSubmit');
+  btn.textContent='DONE';
+  btn.onclick=()=>{
+    if(picked.size){
+      if(META.pins.date!==today) META.pins={date:today,ids:[]};
+      picked.forEach(id=>{ if(!META.pins.ids.includes(id)) META.pins.ids.push(id); });
+      saveMeta();
+    }
+    document.getElementById('checkinWrap').classList.remove('open');
+    refresh();
+  };
 }
 
 // ============ CHRONICLE (history view) ============
@@ -2642,9 +2706,7 @@ function checkScheduledNotifs(){
   if(hhmm===target&&_lastDailyNotifDate!==today){
     _lastDailyNotifDate=today;
     if(!checkinDone()){
-      const streak=checkinStreak();
-      const body=streak>0?'Keep your '+streak+'-day streak alive — file today\'s report!':'Log your progress and keep the party moving.';
-      sendNotif('📋 Daily Report Due',body,'ta-daily');
+      sendNotif('📋 Daily Report',  'Log your progress and keep the party moving.','ta-daily');
     }
   }
 
