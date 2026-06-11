@@ -2,7 +2,7 @@
 // - App shell + art assets precached (cache-first)
 // - index.html network-first so updates land, cached copy serves offline
 // - Google Fonts (CSS + woff2) runtime-cached so the pixel font works offline
-const VERSION = 'ta-v5';
+const VERSION = 'ta-v6';
 const SHELL = VERSION + '-shell';
 const FONTS = VERSION + '-fonts';
 
@@ -25,6 +25,8 @@ const PRECACHE = [
   './wizard_tired.png',
   './wizard_hurt.png',
   './wizard_critical.png',
+  // NOTE: every edit to presets.tsv requires a VERSION bump or installed users keep old presets
+  './presets.tsv',
 ];
 
 self.addEventListener('install', e => {
