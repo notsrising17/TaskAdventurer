@@ -16,6 +16,12 @@
   #vignette{position:fixed;inset:0;pointer-events:none;
     background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(0,0,0,.55) 85%,rgba(0,0,0,.85) 100%);z-index:2;}
   .hud{position:fixed;z-index:5;}
+  /* Toast notifications */
+  #toast{position:fixed;top:56px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:30;
+    font-size:8px;color:var(--gold);background:rgba(10,8,28,.94);border:2px solid var(--gold);
+    padding:8px 14px;letter-spacing:1px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;
+    box-shadow:0 0 16px rgba(0,0,0,.6);white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .glass{background:rgba(10,8,28,0.88);border:2px solid var(--gold);
     box-shadow:0 0 16px rgba(0,0,0,.7),inset 0 0 14px rgba(0,0,0,.5);backdrop-filter:blur(2px);}
 
@@ -26,23 +32,29 @@
   .portCard:hover,.portCard.active{border-color:var(--gold);}
   .portImg{width:80px;height:80px;object-fit:cover;display:block;image-rendering:pixelated;}
   .portCanvas{width:80px;height:80px;display:block;image-rendering:pixelated;}
-  .portName{font-size:4px;color:var(--gold);letter-spacing:.5px;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;width:100%;text-overflow:ellipsis;}
+  .portName{font-size:6px;color:var(--gold);letter-spacing:.5px;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;width:100%;text-overflow:ellipsis;}
+  .portCard.flash{animation:cardflash .6s steps(2);}
+  @keyframes cardflash{0%,50%{border-color:var(--gold);box-shadow:0 0 14px rgba(255,215,0,.8);}25%,75%{border-color:#2a2050;box-shadow:none;}}
   .portHPWrap{width:100%;height:3px;background:#070710;margin-top:2px;}
   .portHPFill{height:100%;transition:width .3s,background-color .3s;}
 
-  /* Stats — move right, shrink slightly since portraits take left */
-  #statsPanel{top:10px;right:10px;width:188px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  /* Stats — slim bar, tap to expand */
+  #statsPanel{top:10px;right:10px;max-width:calc(100% - 20px);padding:0;display:flex;flex-direction:column;}
+  #statsBar{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;flex-wrap:wrap;}
+  #statsChev{font-size:8px;color:var(--gold);margin-left:auto;}
+  #statsBody{display:none;flex-direction:column;gap:8px;padding:0 10px 10px;}
+  #statsPanel.open #statsBody{display:flex;}
   .stat-label{font-size:6px;color:#9a8ad0;}
-  .stat-name{font-size:10px;color:var(--gold);cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s;}
+  .stat-name{font-size:9px;color:var(--gold);cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s;}
   .stat-name:hover{border-bottom-color:var(--gold);}
-  #heroNameInput{font-family:inherit;font-size:10px;background:#070710;color:var(--gold);border:none;border-bottom:1px solid var(--gold);outline:none;width:100%;display:none;padding:2px 0;}
+  #heroNameInput{font-family:inherit;font-size:9px;background:#070710;color:var(--gold);border:none;border-bottom:1px solid var(--gold);outline:none;width:90px;display:none;padding:2px 0;}
   .statline{display:flex;align-items:center;gap:6px;}
   .icn{image-rendering:pixelated;flex:0 0 auto;}
-  .hp-row{font-size:6px;display:flex;justify-content:space-between;align-items:center;}
-  .barwrap{margin-top:4px;height:12px;border:2px solid #2a2050;background:#070710;padding:2px;}
+  .hp-inline{font-size:7px;display:flex;align-items:center;gap:4px;}
+  .barwrap{height:12px;border:2px solid #2a2050;background:#070710;padding:2px;}
   .bar{height:100%;width:100%;transition:width .5s,background-color .5s;}
-  .tasks-stat{font-size:6px;color:var(--text);}
-  .status-badge{font-size:7px;padding:4px;text-align:center;border:2px solid;letter-spacing:1px;}
+  .tasks-stat{font-size:7px;color:var(--text);display:flex;align-items:center;gap:4px;}
+  .status-badge{font-size:6px;padding:3px 6px;letter-spacing:1px;background:rgba(255,255,255,.06);border-radius:2px;}
   .status-badge.blink{animation:badgeblink .7s steps(1) infinite;}
   @keyframes badgeblink{0%{opacity:1;}50%{opacity:.25;}100%{opacity:1;}}
   /* Domain bars */
@@ -60,13 +72,15 @@
     padding:8px;display:none;gap:5px;align-items:stretch;flex-wrap:wrap;
     background:rgba(8,6,20,0.97);border-top:2px solid #4a3a8a;}
   #formPanel.open{display:flex;}
-  #formPanel input,#formPanel select{font-family:inherit;font-size:7px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:6px;outline:none;}
+  #formPanel input,#formPanel select{font-family:inherit;font-size:7px;background:#070710;color:var(--text);border:2px solid #4a3a8a;padding:6px;outline:none;width:100%;}
   #formPanel select option{background:#0d0b22;}
-  #taskName{flex:1 1 160px;min-width:0;}
-  #taskDomain{flex:0 1 110px;}
-  #taskType{flex:0 1 90px;}
-  #taskGoal{flex:0 0 60px;}
-  #taskDate{flex:0 0 auto;}
+  .fgroup{display:flex;flex-direction:column;gap:3px;}
+  .flabel{font-size:5px;color:#9a8ad0;letter-spacing:1px;}
+  #fgName{flex:1 1 160px;min-width:0;}
+  #fgDomain{flex:0 1 110px;}
+  #fgType{flex:0 1 90px;}
+  #fgGoal{flex:0 0 70px;}
+  #fgDate{flex:0 0 auto;}
   #formPanel input::-webkit-calendar-picker-indicator{filter:invert(.8);}
   #addBtn{font-family:inherit;font-size:8px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:8px;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
   #addBtn:active{transform:translateY(2px);border-bottom-width:1px;}
@@ -143,20 +157,23 @@
       background:rgba(6,4,18,.92);border-right:1px solid #1a1430;justify-content:center;}
     .portCard{width:68px;}
     #statsPanel{top:0;right:0;bottom:0;width:210px;border-radius:0;border-top:none;border-right:none;border-bottom:none;
-      overflow-y:auto;padding:16px 12px;}
+      overflow-y:auto;padding:12px 0;}
+    #statsPanel #statsBody{display:flex;}
+    #statsBar{flex-wrap:wrap;cursor:default;}
+    #statsChev{display:none;}
     #listPanel{left:96px;right:210px;}
   }
 
   @media(max-width:600px){
     #portraitCol{top:6px;left:6px;gap:3px;}
-    .portCard{width:46px;padding:3px;}
-    .portImg,.portCanvas{width:40px;height:40px;}
-    .portName{font-size:3px;}
-    #statsPanel{width:calc(100% - 64px);right:0;top:0;padding:8px 10px;gap:6px;border-top:none;border-right:none;}
+    .portCard{width:50px;padding:3px;}
+    .portImg,.portCanvas{width:44px;height:44px;}
+    .portName{font-size:5px;}
+    #statsPanel{width:calc(100% - 64px);right:0;top:0;border-top:none;border-right:none;}
     .stat-name{font-size:8px;}
     #formPanel input,#formPanel select{height:44px;font-size:9px;padding:0 8px;}
-    #taskName,#taskDomain,#taskType{flex:1 1 100%;}
-    #taskGoal,#taskDate{flex:1 1 auto;}
+    .fgroup{flex:1 1 100%;}
+    #fgGoal,#fgDate{flex:1 1 auto;}
     #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
     .task{min-height:48px;padding:6px 8px;}.cb{width:26px;height:26px;flex:0 0 26px;}
     .del{padding:10px 12px;font-size:10px;}
@@ -170,23 +187,21 @@
 <div id="portraitCol"></div>
 
 <div id="statsPanel" class="hud glass">
-  <div>
-    <div class="stat-label">COMMANDER <span style="font-size:5px;color:#6a5a90">(tap to edit)</span></div>
-    <div class="stat-name" id="heroNameDisplay">HERO</div>
+  <div id="statsBar" onclick="toggleStats(event)">
+    <span class="stat-name" id="heroNameDisplay">HERO</span>
     <input type="text" id="heroNameInput" maxlength="12" placeholder="NAME">
+    <span class="hp-inline"><canvas class="icn" id="heartIcn" width="9" height="9"></canvas><span id="hpText">100/100</span></span>
+    <span class="tasks-stat"><canvas class="icn" id="scrollIcn" width="9" height="9"></canvas><span id="taskStat">0/0</span></span>
+    <span class="status-badge" id="statusBadge">READY</span>
+    <span id="statsChev">▾</span>
   </div>
-  <div>
-    <div class="hp-row">
-      <span class="statline"><canvas class="icn" id="heartIcn" width="9" height="9"></canvas><span class="stat-label">HP</span></span>
-      <span id="hpText">100/100</span>
-    </div>
+  <div id="statsBody">
     <div class="barwrap"><div class="bar" id="hpBar"></div></div>
+    <div id="domainBars"></div>
+    <button id="checkinBtn" onclick="showCheckin()">📋 DAILY REPORT</button>
   </div>
-  <div id="domainBars"></div>
-  <div class="statline"><canvas class="icn" id="scrollIcn" width="9" height="9"></canvas><span class="tasks-stat">TASKS <span id="taskStat">0/0</span></span></div>
-  <button id="checkinBtn" onclick="showCheckin()">📋 DAILY REPORT</button>
-  <div class="status-badge" id="statusBadge">READY</div>
 </div>
+<div id="toast"></div>
 
 <div id="listPanel" class="hud">
   <div id="listHead">
@@ -195,15 +210,20 @@
     <button id="collapseBtn">v</button>
   </div>
   <div id="formPanel">
-    <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60">
-    <select id="taskDomain"></select>
-    <select id="taskType">
-      <option value="0">QUEST</option>
-      <option value="1">HABIT</option>
-      <option value="2">TARGET</option>
-    </select>
-    <input type="number" id="taskGoal" placeholder="GOAL #" min="1" max="99" style="display:none">
-    <input type="date" id="taskDate">
+    <div class="fgroup" id="fgName"><label class="flabel" for="taskName">TASK</label>
+      <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60"></div>
+    <div class="fgroup" id="fgDomain"><label class="flabel" for="taskDomain">DOMAIN</label>
+      <select id="taskDomain"></select></div>
+    <div class="fgroup" id="fgType"><label class="flabel" for="taskType">TYPE</label>
+      <select id="taskType">
+        <option value="0">QUEST</option>
+        <option value="1">HABIT</option>
+        <option value="2">TARGET</option>
+      </select></div>
+    <div class="fgroup" id="fgGoal" style="display:none"><label class="flabel" for="taskGoal">GOAL / WK</label>
+      <input type="number" id="taskGoal" placeholder="GOAL #" min="1" max="99"></div>
+    <div class="fgroup" id="fgDate"><label class="flabel" for="taskDate">DUE DATE (OPTIONAL)</label>
+      <input type="date" id="taskDate"></div>
     <button id="addBtn">+ ADD</button>
   </div>
   <div id="listBody"></div>
@@ -245,10 +265,10 @@
 // path: waypoints [[tx,ty],...] from center (6,10) to destination along grid paths
 // spriteRgn no longer needed — dedicated sprite files used instead
 const DOMAINS = [
-  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:1,  targetTy:2,
+  {name:'HOME',       cls:'WIZARD',   dest:'CUSTOM FIELD',   color:'#d4884c', dark:'#8b3a10', targetTx:2,  targetTy:3,
    portraits:['wizard_confident.png','wizard_tired.png','wizard_hurt.png','wizard_critical.png'], sheet:null,
    sprite:'wizard_sprite.png',
-   path:[[6,10],[3,10],[3,2],[1,2]]},
+   path:[[6,10],[3,10],[3,3],[2,3]]},
   {name:'WORK',       cls:'MERCHANT', dest:'CORPORATLANDIA', color:'#c8a840', dark:'#7a6010', targetTx:10, targetTy:2,  portraits:null, sheet:'merchant_sheet.png',
    sprite:'merchant_sprite.png',
    path:[[6,10],[9,10],[9,2],[10,2]]},
@@ -456,6 +476,21 @@ function renderStats(){
   updatePortrait();
 }
 
+// ============ STATS PANEL TOGGLE + TOAST ============
+function toggleStats(e){
+  if(e && (e.target.id==='heroNameDisplay'||e.target.id==='heroNameInput')) return;
+  const open=document.getElementById('statsPanel').classList.toggle('open');
+  document.getElementById('statsChev').textContent=open?'▴':'▾';
+}
+let toastTimer=null;
+function showToast(msg,color){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.color=color||'';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
 // ============ NAME EDITING ============
 function applyName(val){ val=(val||'').trim().toUpperCase().slice(0,12)||'HERO'; state.name=val; document.getElementById('heroNameDisplay').textContent=val; save(); }
 document.getElementById('heroNameDisplay').onclick=()=>{ document.getElementById('heroNameDisplay').style.display='none'; const inp=document.getElementById('heroNameInput'); inp.value=state.name; inp.style.display='block'; inp.focus(); inp.select(); };
@@ -503,8 +538,21 @@ function renderList(){
 
 // ============ ACTIONS ============
 function addTask(name,domain,type,goal,due){
-  state.tasks.push({id:Date.now()+Math.random(),name,domain:parseInt(domain)||0,type:parseInt(type)||0,goal:parseInt(goal)||1,count:0,weekStart:mondayStr(),streak:0,lastDone:null,due:due||null,done:false});
+  const di=parseInt(domain)||0, ti=parseInt(type)||0;
+  state.tasks.push({id:Date.now()+Math.random(),name,domain:di,type:ti,goal:parseInt(goal)||1,count:0,weekStart:mondayStr(),streak:0,lastDone:null,due:due||null,done:false});
   recalcHP();save();refresh();
+  // Feedback: toast + sparkle at the unit + portrait flash
+  const d=DOMAINS[di];
+  const kind=ti===T_HABIT?'NEW HABIT':ti===T_TARGET?'NEW TARGET':'NEW QUEST';
+  showToast(kind+' — '+d.cls+'!',d.color);
+  sparkleAt(unitPos[di].x,unitPos[di].y);
+  const pc=document.getElementById('pc'+di);
+  if(pc){ pc.classList.remove('flash'); void pc.offsetWidth; pc.classList.add('flash'); }
+  // One-time hint teaching the core loop
+  if(!localStorage.getItem('ta_hint')){
+    localStorage.setItem('ta_hint','1');
+    setTimeout(()=>showToast('COMPLETE QUESTS TO MARCH YOUR PARTY ONWARD!'),2600);
+  }
 }
 function toggleTask(id){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
@@ -521,7 +569,7 @@ function toggleTask(id){
     t.count=(t.count||0)+1; state.hp=Math.min(HP_MAX,state.hp+3);
     if(t.count>=t.goal) sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2);
   } else {
-    if(!t.done){ t.done=true; state.hp=Math.min(HP_MAX,state.hp+15); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); }
+    if(!t.done){ t.done=true; state.hp=Math.min(HP_MAX,state.hp+15); sparkleAt(d.targetTx*TS+TS/2,d.targetTy*TS+TS/2); showToast('QUEST COMPLETE — '+d.cls+' MARCHES ON!',d.color); }
     else t.done=false;
   }
   recalcHP();save();refresh();
@@ -552,8 +600,8 @@ function buildMap(){
   for(let y=0;y<ROWS;y++) m[y][6]=1;
 
   // HOME (Wizard) spawn(3,7) → dest(1,2): col 3, row 2 west
-  for(let y=2;y<=10;y++) path(y,3);
-  for(let x=1;x<=3;x++) path(2,x);
+  for(let y=3;y<=10;y++) path(y,3);
+  for(let x=2;x<=3;x++) path(3,x);
 
   // WORK (Merchant) spawn(9,7) → dest(11,2): col 9, row 2 east
   for(let y=2;y<=10;y++) path(y,9);
@@ -601,7 +649,7 @@ function drawUnit(x,y,idx,hp){
     mx.fillStyle=d.color; mx.beginPath(); mx.moveTo(x,y-UNIT_H); mx.lineTo(x+UNIT_W/2,y-UNIT_H/2); mx.lineTo(x,y); mx.lineTo(x-UNIT_W/2,y-UNIT_H/2); mx.closePath(); mx.fill();
     mx.fillStyle='#fff'; mx.font='bold 7px monospace'; mx.textAlign='center'; mx.textBaseline='middle'; mx.fillText(d.cls[0],x,y-UNIT_H/2);
   }
-  mx.fillStyle=STATUS_COLOR[lvl]; mx.beginPath(); mx.arc(x,y-UNIT_H-3,2.5,0,7); mx.fill();
+  if(lvl>0){ mx.fillStyle=STATUS_COLOR[lvl]; mx.beginPath(); mx.arc(x,y-UNIT_H-3,2.5,0,7); mx.fill(); }
 }
 function xEyes(x,ey){ mx.strokeStyle='#ee2222'; mx.lineWidth=1; mx.beginPath(); mx.moveTo(x-3,ey-1); mx.lineTo(x-1,ey+1); mx.moveTo(x-1,ey-1); mx.lineTo(x-3,ey+1); mx.stroke(); mx.beginPath(); mx.moveTo(x+1,ey-1); mx.lineTo(x+3,ey+1); mx.moveTo(x+3,ey-1); mx.lineTo(x+1,ey+1); mx.stroke(); }
 function drawWizard(x,y,col,dark,lvl){
@@ -698,12 +746,11 @@ function drawObjective(d,captured,idx){
   } else {
     drawGenericObjective(cx,cy,d,captured);
   }
-  // destination label (two lines: dest name + class)
-  mx.font='2.5px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
-  mx.fillStyle='rgba(0,0,0,.85)'; mx.fillText(d.dest,cx+.4,cy+15.4);
-  mx.fillStyle=captured?'#ffe840':'#ff9999'; mx.fillText(d.dest,cx,cy+15);
-  mx.fillStyle='rgba(0,0,0,.7)'; mx.fillText(d.cls,cx+.3,cy+19.3);
-  mx.fillStyle=captured?d.color:'#888888'; mx.fillText(d.cls,cx,cy+19);
+  // destination label — larger, on a dark plate for legibility
+  mx.font='3.5px "Press Start 2P",monospace'; mx.textAlign='center'; mx.textBaseline='top';
+  const tw=mx.measureText(d.dest).width;
+  mx.fillStyle='rgba(5,5,16,.78)'; mx.fillRect(cx-tw/2-2,cy+13.5,tw+4,6);
+  mx.fillStyle=captured?'#ffe840':'#ffd0d0'; mx.fillText(d.dest,cx,cy+14.5);
 }
 
 function drawHomeHQ(cx,cy,captured,d){
@@ -849,10 +896,15 @@ function drawMap(time){
   mapOX = (W-COLS*TS*mapScale)/2;
   mapOY = (H-ROWS*TS*mapScale)/2;
 
-  // Fill letterbox bars with dark
-  mx.fillStyle='#050510';
-  if(mapOX>0){ mx.fillRect(0,0,mapOX,H); mx.fillRect(W-mapOX,0,mapOX,H); }
-  if(mapOY>0){ mx.fillRect(0,0,W,mapOY); mx.fillRect(0,H-mapOY,W,mapOY); }
+  // Fill letterbox bars — subtle checker so dead space looks intentional
+  if(mapOX>0.5||mapOY>0.5){
+    mx.fillStyle='#070612'; mx.fillRect(0,0,W,H);
+    mx.fillStyle='rgba(255,255,255,.018)';
+    const cs=28;
+    for(let cy2=0;cy2<H;cy2+=cs) for(let cx2=0;cx2<W;cx2+=cs){
+      if(((cx2+cy2)/cs)%2===0) mx.fillRect(cx2,cy2,cs,cs);
+    }
+  }
 
   mx.save();
   mx.translate(mapOX,mapOY);
@@ -899,18 +951,17 @@ function drawMap(time){
     if(MAP[y][x]!==4) continue;
     const cxp=x*TS+TS/2,cyp=y*TS+TS/2;
     // Shadow
-    mx.fillStyle='rgba(0,0,0,.3)'; mx.beginPath(); mx.ellipse(cxp+2,cyp+7,10,4,0,0,7); mx.fill();
-    // Trunk
-    mx.fillStyle='#3a2410'; mx.fillRect(cxp-2,cyp+2,4,6);
-    // Dark inner canopy
-    mx.fillStyle='#0f3010'; mx.beginPath(); mx.arc(cxp,cyp,10,0,7); mx.fill();
-    mx.beginPath(); mx.arc(cxp-5,cyp-2,6,0,7); mx.fill();
-    mx.beginPath(); mx.arc(cxp+5,cyp+1,6,0,7); mx.fill();
-    // Mid canopy
-    mx.fillStyle='#1a5018'; mx.beginPath(); mx.arc(cxp-1,cyp-1,8,0,7); mx.fill();
-    // Highlight
-    mx.fillStyle='#3a9a30'; mx.beginPath(); mx.arc(cxp-2,cyp-4,5,0,7); mx.fill();
-    mx.fillStyle='#5cc04a'; mx.beginPath(); mx.arc(cxp-4,cyp-5,2.5,0,7); mx.fill();
+    mx.fillStyle='rgba(0,0,0,.3)'; mx.beginPath(); mx.ellipse(cxp+1,cyp+8,8,3,0,0,7); mx.fill();
+    // Trunk — clearly visible so it reads as a tree, not an orb
+    mx.fillStyle='#5a3a1a'; mx.fillRect(cxp-2,cyp+2,4,7);
+    mx.fillStyle='#3a2410'; mx.fillRect(cxp,cyp+2,2,7);
+    // Pine canopy — three stacked triangle layers
+    const tri=(yTop,half,yBase,col)=>{ mx.fillStyle=col; mx.beginPath(); mx.moveTo(cxp,yTop); mx.lineTo(cxp+half,yBase); mx.lineTo(cxp-half,yBase); mx.closePath(); mx.fill(); };
+    tri(cyp-7,9,cyp+4,'#0f3010');
+    tri(cyp-11,7,cyp-1,'#1a5018');
+    tri(cyp-15,5,cyp-6,'#2a7424');
+    // Left-edge highlight
+    mx.fillStyle='#4aa83a'; mx.fillRect(cxp-3,cyp-9,2,2); mx.fillRect(cxp-2,cyp-13,2,2);
   }
 
   // Objectives
@@ -924,8 +975,10 @@ function drawMap(time){
   const pulse=0.5+0.5*Math.sin(time/250);
   const hx=6*TS+TS/2,hy=10*TS+TS/2,lvl=hpLevel();
   const tokCol=['#3a7aff','#ffcc22','#ff8822','#ff2a2a'][lvl];
-  mx.strokeStyle=tokCol+'88'; mx.lineWidth=2;
-  mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
+  if(lvl>0){
+    mx.strokeStyle=tokCol+'aa'; mx.lineWidth=2;
+    mx.beginPath(); mx.arc(hx,hy+5,12+pulse*4,0,7); mx.stroke();
+  }
   mx.fillStyle='rgba(0,0,0,.35)'; mx.beginPath(); mx.ellipse(hx,hy+7,9,4,0,0,7); mx.fill();
   mx.save(); mx.shadowColor=tokCol; mx.shadowBlur=14;
   if(spriteImg.complete&&spriteImg.naturalWidth>0){ mx.drawImage(spriteImg,hx-14,hy-18,28,32); }
@@ -944,13 +997,25 @@ function drawMap(time){
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(dist>0.5){ unitPos[i].x+=dx/dist*UNIT_SPEED; unitPos[i].y+=dy/dist*UNIT_SPEED; }
     }
-    const sc=STATUS_COLOR[hpLevelOf(hp)];
-    mx.strokeStyle=sc+'88'; mx.lineWidth=1.5;
-    mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
+    // Status ring only when degraded — a healthy unit needs no alert
+    const ulvl=hpLevelOf(hp);
+    if(ulvl>0){
+      mx.strokeStyle=STATUS_COLOR[ulvl]+'aa'; mx.lineWidth=1.5;
+      mx.beginPath(); mx.arc(unitPos[i].x,unitPos[i].y+8,11+pulse*3,0,7); mx.stroke();
+    }
     drawUnit(unitPos[i].x,unitPos[i].y,i,hp);
   });
 
   mx.restore();
+
+  // Decorative frame around the map when letterboxed (desktop) — JRPG bezel
+  if(mapOX>10||mapOY>10){
+    const fx=mapOX,fy=mapOY,fw=COLS*TS*mapScale,fh=ROWS*TS*mapScale;
+    mx.strokeStyle='#1a1430'; mx.lineWidth=8; mx.strokeRect(fx-9,fy-9,fw+18,fh+18);
+    mx.strokeStyle='#6a5a20'; mx.lineWidth=2; mx.strokeRect(fx-4,fy-4,fw+8,fh+8);
+    mx.fillStyle='#c8a840';
+    [[fx-8,fy-8],[fx+fw,fy-8],[fx-8,fy+fh],[fx+fw,fy+fh]].forEach(([qx,qy])=>mx.fillRect(qx,qy,8,8));
+  }
 }
 
 function loop(time){ drawMap(time); requestAnimationFrame(loop); }
@@ -958,8 +1023,8 @@ function loop(time){ drawMap(time); requestAnimationFrame(loop); }
 // ============ FORM ============
 function updateFormFields(){
   const type=parseInt(document.getElementById('taskType').value);
-  document.getElementById('taskGoal').style.display=type===T_TARGET?'':'none';
-  document.getElementById('taskDate').style.display=type===T_QUEST?'':'none';
+  document.getElementById('fgGoal').style.display=type===T_TARGET?'':'none';
+  document.getElementById('fgDate').style.display=type===T_QUEST?'':'none';
 }
 document.getElementById('taskType').addEventListener('change',updateFormFields);
 
