@@ -435,8 +435,12 @@ check('export/import: old v2 payload migrates (target→habit, weekLog, msBase)'
 
 // ---------- welcome card + sample campaign ----------
 await page.goto(BASE);
+// let pending async saveMeta writes from the previous scenario flush, then clear
+await page.evaluate(() => new Promise(res => setTimeout(res, 150)));
 await page.evaluate(() => { localStorage.clear(); });
 await page.reload();
+// the meet-your-party card opens after presets load — wait for it
+await page.waitForSelector('#welcomeWrap.open', { timeout: 3000 }).catch(() => {});
 r = await page.evaluate(() => ({
   visible: document.getElementById('welcomeWrap').classList.contains('open'),
   welcomed: META.welcomed,
@@ -632,6 +636,217 @@ r = await page.evaluate(() => {
   return { habitCount: habits.length, habitDomains: habitDomains.length };
 });
 check('presets: offline fallback seeds ≥1 habit per domain (5 domains)', r.habitDomains === 5, JSON.stringify(r));
+
+// ---------- 15. v6 migration: town, deeds backfill, side quest meta ----------
+await page.goto(BASE);
+await page.evaluate(() => {
+  localStorage.clear();
+  localStorage.setItem('ta_version', '5');
+  localStorage.setItem('ta_meta', JSON.stringify({ welcomed: true, msInit: true }));
+  localStorage.setItem('ta_tasks', JSON.stringify([
+    { id: 1, name: 'Q', domain: 0, type: 0, done: true, due: null, snoozeCount: 0 },
+    { id: 2, name: 'H', domain: 2, type: 1, dailyCap: true, goal: 3, weekCount: 0, weekStart: null, weekLog: [], snoozeCount: 0 },
+  ]));
+  const now = Date.now();
+  localStorage.setItem('ta_events', JSON.stringify([
+    { t: now - 5000, ev: 'done', id: 1, d: 0, k: 0 },
+    { t: now - 4000, ev: 'habit', id: 2, d: 2, k: 1 },
+    { t: now - 3000, ev: 'habit', id: 2, d: 2, k: 1 },
+    { t: now - 2000, ev: 'unhabit', id: 2, d: 2, k: 1 },
+  ]));
+  localStorage.setItem('ta_expedition', JSON.stringify(Object.assign(expDefaults(), { week: mondayStr(), converted: true, town: undefined, deeds: undefined })));
+});
+await page.reload();
+r = await page.evaluate(() => ({
+  version: localStorage.getItem('ta_version'),
+  town: EXPEDITION.town, deeds: EXPEDITION.deeds,
+  sqFields: Array.isArray(META.sqHistory) && META.sqRerolled === false,
+}));
+check('v6 migration: version bumped to 6', r.version === '6', r.version);
+check('v6 migration: town defaults seeded (castleTier 1, no plots)', r.town && r.town.castleTier === 1 && Object.keys(r.town.plots || {}).length === 0, JSON.stringify(r.town));
+check('v6 migration: deeds backfilled net of un-events (1 home, 1 health)', r.deeds.join(',') === '1,0,1,0,0', JSON.stringify(r.deeds));
+check('v6 migration: side quest meta fields present', r.sqFields === true, JSON.stringify(r));
+// idempotent: run migrate(5) again, deeds unchanged
+r = await page.evaluate(() => { const before = EXPEDITION.deeds.join(','); migrate(5); return before === EXPEDITION.deeds.join(','); });
+check('v6 migration: deeds backfill idempotent', r === true);
+
+// ---------- 16. deeds + levels ----------
+r = await page.evaluate(() => {
+  const t = levelThresholds();
+  return {
+    first3: t.slice(0, 3).join(','),
+    lv0: deedsLevel(9), lv1: deedsLevel(10), lv2: deedsLevel(25), lv2b: deedsLevel(54), lv3: deedsLevel(55),
+  };
+});
+check('levels: thresholds 10,25,55 with gap growing +15', r.first3 === '10,25,55', r.first3);
+check('levels: deedsLevel boundaries (9→0, 10→1, 25→2, 54→2, 55→3)',
+  r.lv0 === 0 && r.lv1 === 1 && r.lv2 === 2 && r.lv2b === 2 && r.lv3 === 3, JSON.stringify(r));
+r = await page.evaluate(() => {
+  EXPEDITION.deeds = [9, 0, 0, 0, 0];
+  incrementDeeds(0, 1); // crosses LV 1
+  const toast = document.getElementById('toast').textContent;
+  incrementDeeds(0, -1);
+  incrementDeeds(0, -100); // floor 0
+  return { toast, after: EXPEDITION.deeds[0] };
+});
+check('deeds: crossing a threshold fires the level-up toast', /LEVEL 1/.test(r.toast), r.toast);
+check('deeds: decrement floors at 0', r.after === 0, r.after);
+// completion path: toggle increments, un-toggle decrements
+r = await page.evaluate(() => {
+  EXPEDITION.deeds = [0, 0, 0, 0, 0];
+  const t = { id: 920, name: 'D', domain: 3, type: 0, done: false, due: null, repeat: 0, snoozeCount: 0 };
+  state.tasks.push(t);
+  toggleTask(920); const a = EXPEDITION.deeds[3];
+  toggleTask(920); const b = EXPEDITION.deeds[3];
+  state.tasks = state.tasks.filter(x => x.id !== 920);
+  return { a, b };
+});
+check('deeds: toggleTask +1 and un-toggle −1', r.a === 1 && r.b === 0, JSON.stringify(r));
+
+// ---------- 17. side quests ----------
+r = await page.evaluate(() => {
+  const sqs = [
+    { id: 'a', rarity: 'common', gold: 5, hook: 'A', action: 'aa' },
+    { id: 'b', rarity: 'common', gold: 5, hook: 'B', action: 'bb' },
+    { id: 'c', rarity: 'rare', gold: 12, hook: 'C', action: 'cc' },
+  ];
+  const p1 = pickSQ(sqs, '2026-06-12', []);
+  const p2 = pickSQ(sqs, '2026-06-12', []);
+  const ex = pickSQ(sqs, '2026-06-12', [p1.id]);
+  // all excluded → still returns something
+  const all = pickSQ(sqs, '2026-06-12', ['a', 'b', 'c']);
+  return { deterministic: p1.id === p2.id, excluded: ex.id !== p1.id, fallback: !!all };
+});
+check('sidequests: pick is deterministic for a given seed', r.deterministic === true);
+check('sidequests: exclusion ring avoids recent picks', r.excluded === true);
+check('sidequests: all-excluded falls back to a valid quest', r.fallback === true);
+// TSV parser: malformed lines skipped, valid kept
+r = await page.evaluate(() => {
+  const tsv = 'id\trarity\tgold\thook\taction\nsq1\tcommon\t5\tHOOK\tDo it\nBADLINE\nsq2\trare\t12\tH2\tDo more';
+  const sqs = parseSideQuestsTSV(tsv);
+  return { count: sqs.length, ids: sqs.map(s => s.id).join(',') };
+});
+check('sidequests: TSV parser skips malformed lines', r.count === 2 && r.ids === 'sq1,sq2', JSON.stringify(r));
+// sqHistory stays flat after a pick, and corrupted history self-heals on load
+r = await page.evaluate(async () => {
+  META.sqHistory = []; META.sqDate = ''; META.sqId = ''; META.sqDone = false; META.sqRerolled = false;
+  renderList();
+  await loadSideQuests();
+  await new Promise(res => setTimeout(res, 50));
+  const flat = (META.sqHistory || []).every(x => typeof x === 'string');
+  const picked = META.sqId !== '';
+  return { flat, picked, len: META.sqHistory.length };
+});
+check('sidequests: daily pick recorded, history stays flat', r.flat && r.picked && r.len >= 1, JSON.stringify(r));
+await page.evaluate(() => {
+  META.sqHistory = [['old1', ['old2']], 'old3']; saveMeta();
+});
+await page.reload();
+r = await page.evaluate(() => ({ hist: META.sqHistory, flat: META.sqHistory.every(x => typeof x === 'string') }));
+check('sidequests: corrupted nested history flattened on load', r.flat && r.hist.includes('old1') && r.hist.includes('old3'), JSON.stringify(r.hist));
+// completion pays gold once and marks done
+r = await page.evaluate(async () => {
+  META.sqDate = todayStr(); META.sqId = ''; META.sqDone = false; META.sqRerolled = false; saveMeta();
+  renderList();
+  await new Promise(res => setTimeout(res, 80));
+  const goldBefore = EXPEDITION.gold;
+  const btns = [...document.querySelectorAll('#sqCard .miniBtn')];
+  const doneBtn = btns.find(b => /COMPLETE/.test(b.textContent));
+  const hadReroll = btns.some(b => /ANOTHER/.test(b.textContent));
+  if (doneBtn) doneBtn.click();
+  await new Promise(res => setTimeout(res, 50));
+  const goldAfter = EXPEDITION.gold;
+  const doneShown = document.getElementById('sqCard').innerText.includes('SIDE QUEST COMPLETE');
+  return { paid: goldAfter > goldBefore, done: META.sqDone, doneShown, hadReroll };
+});
+check('sidequests: COMPLETE pays gold and marks the day done', r.paid && r.done && r.doneShown, JSON.stringify(r));
+check('sidequests: reroll offered before completion', r.hadReroll === true);
+
+// ---------- 18. town: build, upgrade, gold floor ----------
+r = await page.evaluate(() => {
+  EXPEDITION.gold = 100; EXPEDITION.town = { castleTier: 1, plots: {} }; saveExp();
+  townPlotClick(0); // open build modal
+  const open = document.getElementById('townBuildWrap').classList.contains('open');
+  const buyBtns = [...document.querySelectorAll('#townModalBody .shopBuy')];
+  const wellBtn = buyBtns.find(b => b.textContent.includes('20'));
+  const statueBtn = buyBtns.find(b => b.textContent.includes('150'));
+  const statueDisabled = statueBtn ? statueBtn.disabled : null;
+  wellBtn.click();
+  return {
+    open, statueDisabled,
+    built: EXPEDITION.town.plots[0] && EXPEDITION.town.plots[0].key === 'well',
+    gold: EXPEDITION.gold,
+    statShown: document.getElementById('expStat').textContent.includes('80'),
+    closed: !document.getElementById('townBuildWrap').classList.contains('open'),
+  };
+});
+check('town: plot modal opens with unaffordable items disabled', r.open && r.statueDisabled === true, JSON.stringify(r));
+check('town: building a well deducts 20 gold and records the plot', r.built && r.gold === 80, JSON.stringify(r));
+check('town: stats bar gold refreshes after purchase', r.statShown === true);
+check('town: modal closes after build', r.closed === true);
+r = await page.evaluate(() => {
+  EXPEDITION.gold = 130; EXPEDITION.town.castleTier = 1; saveExp();
+  townCastleClick();
+  const btn = [...document.querySelectorAll('#townModalBody .shopBuy')].find(b => /UPGRADE/.test(b.textContent));
+  btn.click();
+  return { tier: EXPEDITION.town.castleTier, gold: EXPEDITION.gold };
+});
+check('town: castle upgrade to tier 2 costs 120', r.tier === 2 && r.gold === 10, JSON.stringify(r));
+
+// ---------- 19. export/import round-trips town + deeds ----------
+r = await page.evaluate(() => {
+  EXPEDITION.town = { castleTier: 3, plots: { 0: { key: 'well', boughtDate: todayStr() }, 4: { key: 'smithy', boughtDate: todayStr() } } };
+  EXPEDITION.deeds = [5, 0, 12, 1, 0]; saveExp();
+  const payload = { version: SCHEMA_VERSION, name: state.name, tasks: state.tasks, milestones: state.milestones, checkin: [], events: state.events, eventSums: state.eventSums, meta: META, expedition: EXPEDITION };
+  const json = JSON.stringify(payload);
+  EXPEDITION = expDefaults();
+  const p = JSON.parse(json);
+  EXPEDITION = Object.assign(expDefaults(), p.expedition);
+  let v = parseInt(p.version) || 1;
+  while (v < SCHEMA_VERSION) { migrate(v); v++; }
+  return { tier: EXPEDITION.town.castleTier, plots: Object.keys(EXPEDITION.town.plots).length, deeds: EXPEDITION.deeds.join(',') };
+});
+check('export/import: town castle tier and plots round-trip', r.tier === 3 && r.plots === 2, JSON.stringify(r));
+check('export/import: deeds round-trip', r.deeds === '5,0,12,1,0', r.deeds);
+
+// ---------- 20. meet-your-party onboarding ----------
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+r = await page.evaluate(() => ({
+  open: document.getElementById('welcomeWrap').classList.contains('open'),
+  dots: document.querySelectorAll('.meet-dot').length,
+  cls: document.getElementById('meetCls').textContent,
+}));
+check('meet: wizard step 0 shows with 5 progress dots', r.open && r.dots === 5 && r.cls === 'WIZARD', JSON.stringify(r));
+// select a chip on step 0, advance to last step, START EMPTY clears everything
+r = await page.evaluate(async () => {
+  await loadPresets();
+  await new Promise(res => setTimeout(res, 50));
+  const chip = document.querySelector('#meetChips .meet-chip');
+  if (chip) chip.click();
+  const selectedAfterClick = Object.keys(_meetSelected).length;
+  for (let k = 0; k < 4; k++) meetAdvance(true); // to last step
+  const lastLabel = document.getElementById('meetSkip').textContent;
+  meetAdvance(false); // START EMPTY
+  return { selectedAfterClick, lastLabel, tasks: state.tasks.length, welcomed: META.welcomed, closed: !document.getElementById('welcomeWrap').classList.contains('open') };
+});
+check('meet: chip selection registers', r.selectedAfterClick === 1, r.selectedAfterClick);
+check('meet: last step skip is labeled START EMPTY', r.lastLabel === 'START EMPTY', r.lastLabel);
+check('meet: START EMPTY discards earlier selections (zero tasks)', r.tasks === 0 && r.welcomed && r.closed, JSON.stringify(r));
+// BEGIN path adds selected habits
+await page.goto(BASE);
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload();
+r = await page.evaluate(async () => {
+  await loadPresets();
+  await new Promise(res => setTimeout(res, 50));
+  const chip = document.querySelector('#meetChips .meet-chip');
+  if (chip) chip.click();
+  for (let k = 0; k < 5; k++) meetAdvance(true); // through all steps + BEGIN
+  return { tasks: state.tasks.length, isHabit: state.tasks.every(t => t.type === 1), welcomed: META.welcomed };
+});
+check('meet: BEGIN adds the selected habit', r.tasks === 1 && r.isHabit && r.welcomed, JSON.stringify(r));
 
 // ---------- wrap up ----------
 check('zero page errors across all scenarios', errors.length === 0, errors.join(' | '));

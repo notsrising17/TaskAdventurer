@@ -3475,6 +3475,19 @@ function renderChronTotals(){
     const b=document.createElement('span'); b.textContent=String(totals[i]); b.style.color='#cbb8ff';
     row.appendChild(a); row.appendChild(b); el.appendChild(row);
   });
+  // Side quests have no domain — counted separately
+  const fromStr=localDateStr(from),toStr=todayStr();
+  const sqN=state.events.reduce((n,e)=>{
+    if(e.ev!=='side') return n;
+    const day=localDateStr(new Date(e.t));
+    return (day>=fromStr&&day<=toStr)?n+1:n;
+  },0);
+  if(sqN>0){
+    const row=document.createElement('div'); row.className='ch-row';
+    const a=document.createElement('span'); a.textContent='📜 SIDE QUESTS'; a.style.color='#c8a840';
+    const b=document.createElement('span'); b.textContent=String(sqN); b.style.color='#cbb8ff';
+    row.appendChild(a); row.appendChild(b); el.appendChild(row);
+  }
 }
 
 // ============ NOTIFICATIONS ============
