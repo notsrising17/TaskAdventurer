@@ -938,6 +938,9 @@ function loadMeta(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||'null');
     if(m&&typeof m==='object') META=Object.assign(metaDefaults(),m);
+    // Repair sqHistory corrupted by an old nested-array push
+    if(Array.isArray(META.sqHistory))
+      META.sqHistory=META.sqHistory.flat(Infinity).filter(x=>typeof x==='string').slice(-10);
   }catch(e){ META=metaDefaults(); }
 }
 function saveMeta(){ try{ localStorage.setItem(META_KEY,JSON.stringify(META)); }catch(e){} }
@@ -1736,6 +1739,7 @@ function checkParents(){
     if(kids.every(c=>c.done)){
       t.done=true;
       logEvent('done',t);
+      incrementDeeds(t.domain||0,1); // keep live play consistent with the v6 deeds backfill
       showToast('⚑ '+t.name.toUpperCase().slice(0,22)+' CONQUERED!','#ffd700');
     }
   });
@@ -2180,9 +2184,12 @@ function _renderMeetStep(){
 
 function meetAdvance(keepSelected){
   if(!keepSelected){
-    // deselect all chips for this step
-    const i = _meetStep;
-    Object.keys(_meetSelected).forEach(k => { if(k.startsWith(i+':')) delete _meetSelected[k]; });
+    // SKIP deselects this step's chips; START EMPTY (last step) clears everything
+    if(_meetStep === DOMAINS.length - 1){ _meetSelected = {}; }
+    else {
+      const i = _meetStep;
+      Object.keys(_meetSelected).forEach(k => { if(k.startsWith(i+':')) delete _meetSelected[k]; });
+    }
   }
   if(_meetStep < DOMAINS.length - 1){
     _meetStep++;
@@ -2643,7 +2650,7 @@ function fitTown(){
   tc.width=Math.round(window.innerWidth*dpr);
   tc.height=Math.round(Math.max(340,window.innerHeight)*dpr);
 }
-window.addEventListener('resize',fitTown);
+window.addEventListener('resize',()=>{ fitTown(); if(townVisible()) drawTown(); });
 
 // Art image cache
 const _townImgs = {};
@@ -2795,17 +2802,18 @@ function drawTownFrame(time){
     tx.fillRect(avX + 1*s, avY - 4*s, 2*s, 4*s);
   }
 
-  // HUD header
+  // HUD header — pushed below the fixed stats bar on mobile
   const s = Math.max(1, H/420);
+  const topOff = mobileMQ.matches ? 60 * (W / window.innerWidth) : 0;
   tx.font = Math.round(10*s) + 'px "Press Start 2P",monospace';
   tx.textAlign = 'center';
   tx.textBaseline = 'alphabetic';
   tx.fillStyle = '#ffd700';
-  tx.fillText('⚜ ' + (EXPEDITION.gold||0) + ' GOLD', W/2, 36*s);
+  tx.fillText('⚜ ' + (EXPEDITION.gold||0) + ' GOLD', W/2, topOff + 36*s);
   tx.font = Math.round(7*s) + 'px "Press Start 2P",monospace';
   tx.fillStyle = '#9a8ad0';
   const nextIn = LANDMARK_EVERY - (Math.floor(EXPEDITION.leagues||0) % LANDMARK_EVERY) || LANDMARK_EVERY;
-  tx.fillText('THIS WEEK\'S EXPEDITION: ' + Math.floor(EXPEDITION.leagues||0) + ' LEAGUES · NEXT LANDMARK ' + nextIn, W/2, 54*s);
+  tx.fillText('THIS WEEK\'S EXPEDITION: ' + Math.floor(EXPEDITION.leagues||0) + ' LEAGUES · NEXT LANDMARK ' + nextIn, W/2, topOff + 54*s);
 
   // Coin flights
   coinFlights = coinFlights.filter(f => {
@@ -2898,7 +2906,7 @@ function townPlotClick(i){
           EXPEDITION.gold -= s.cost;
           if(!EXPEDITION.town) EXPEDITION.town = {castleTier:1, plots:{}};
           EXPEDITION.town.plots[i] = {key:s.key, boughtDate:todayStr()};
-          saveExp(); drawTown(); closeTownModal();
+          saveExp(); drawTown(); renderStats(); closeTownModal();
           showToast('⚜ '+s.name+' BUILT!', '#ffd700');
         };
         row.appendChild(btn);
@@ -2929,7 +2937,7 @@ function townCastleClick(){
         if((EXPEDITION.gold||0) < nextTier.cost) return;
         EXPEDITION.gold -= nextTier.cost;
         EXPEDITION.town.castleTier = tier + 1;
-        saveExp(); drawTown(); closeTownModal();
+        saveExp(); drawTown(); renderStats(); closeTownModal();
         showToast('⚜ CASTLE UPGRADED TO '+nextTier.name+'!', '#ffd700');
       };
       row.appendChild(btn); body.appendChild(row);
@@ -3036,11 +3044,12 @@ function drawSideQuestCard(){
   el.innerHTML='';
   loadSideQuests().then(sqs=>{
     let cur=sqs.find(s=>s.id===sq.id);
-    if(!cur&&!sq.id){
+    // sqId referencing a quest removed from the TSV: re-pick instead of vanishing
+    if(!cur){
       const picked=pickSQ(sqs,META.sqDate,META.sqHistory||[]);
       META.sqId=picked.id;
       if(!(META.sqHistory||[]).includes(picked.id)){
-        META.sqHistory=[(META.sqHistory||[]),...[picked.id]].slice(-10);
+        META.sqHistory=[...(META.sqHistory||[]),picked.id].slice(-10);
       }
       saveMeta();
       cur=picked;
@@ -3071,6 +3080,8 @@ function drawSideQuestCard(){
       EXPEDITION.gold+=(cur.gold||0); saveExp();
       META.sqDone=true; saveMeta();
       logEvent('side',null,undefined);
+      renderStats();
+      if(townVisible()) flyCoin(cur.gold||0);
       drawSideQuestCard();
       showToast('📜 SIDE QUEST COMPLETE — +'+cur.gold+' GOLD','#c8a840');
     };
