@@ -892,6 +892,9 @@ function updatePortraits(){
       const lv=deedsLevel(deeds);
       const wkLeagues=domainWeekLeagues(i);
       prog.textContent='LV '+lv+' · '+deeds+' DEEDS · '+wkLeagues+' LEAGUES THIS WK';
+      // Permanent level marker: one gold star per level, capped at 5
+      const nm=document.querySelector('#pc'+i+' .portName');
+      if(nm) nm.textContent=d.cls+(lv>0?' '+'★'.repeat(Math.min(lv,5)):'');
     }
   });
   const bb=document.getElementById('partyBestBanner');
