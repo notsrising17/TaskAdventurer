@@ -792,6 +792,16 @@ r = await page.evaluate(() => {
   return { tier: EXPEDITION.town.castleTier, gold: EXPEDITION.gold };
 });
 check('town: castle upgrade to tier 2 costs 120', r.tier === 2 && r.gold === 10, JSON.stringify(r));
+// collection policy: a structure standing on any plot is ✓ BUILT elsewhere
+r = await page.evaluate(() => {
+  townPlotClick(1);
+  const txt = document.getElementById('townModalBody').innerText;
+  const wellRow = [...document.querySelectorAll('#townModalBody .shopRow')].find(row => row.innerText.includes('WELL') && !row.innerText.includes('FOUNTAIN'));
+  closeTownModal();
+  return { built: wellRow ? wellRow.innerText.includes('✓ BUILT') : null, othersBuyable: /BUILD \d+/.test(txt) };
+});
+check('town: built structure shows ✓ BUILT on other plots', r.built === true, JSON.stringify(r));
+check('town: unbuilt structures remain buyable', r.othersBuyable === true);
 
 // ---------- 19. export/import round-trips town + deeds ----------
 r = await page.evaluate(() => {

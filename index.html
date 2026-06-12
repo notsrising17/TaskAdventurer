@@ -1490,6 +1490,14 @@ function maybeShowRollover(){
     title.textContent='THE EXPEDITION RETURNS';
     body.style.display='';
     body.textContent=p.leagues+' LEAGUES, '+p.landmarks+' LANDMARK'+(p.landmarks===1?'':'S')+'. +'+p.gold+' GOLD.';
+    // Point the gold at the town: name the best structure it can now buy
+    const builtKeys=Object.values((EXPEDITION.town||{}).plots||{}).map(b=>b.key);
+    const affordable=STRUCTURES.filter(s=>!builtKeys.includes(s.key)&&s.cost<=(EXPEDITION.gold||0));
+    if(affordable.length){
+      const best=affordable[affordable.length-1];
+      body.textContent+='\nTHE COFFERS COULD RAISE A '+best.name+'.';
+      body.style.whiteSpace='pre-line';
+    }
     shopBtn.style.display='';
   }
   document.getElementById('rollWrap').classList.add('open');
@@ -2784,6 +2792,26 @@ function drawTownFrame(time){
     }
   });
 
+  // Class banners over the castle — one per domain at level 3+, in class color.
+  // The town reflects effort, not just gold spent.
+  {
+    const lvls = DOMAINS.map((_,i)=>deedsLevel((EXPEDITION.deeds||[])[i]||0));
+    const flying = DOMAINS.map((d,i)=>({d,lv:lvls[i]})).filter(x=>x.lv>=3);
+    const fw = Math.max(8, Math.round(cw*0.07)), fh = Math.round(fw*0.7), pole = fh*2;
+    flying.forEach((x,k)=>{
+      const fx = Math.round(cx + cw*(0.15 + 0.7*(flying.length===1?0.5:k/(flying.length-1))));
+      const fy = cy - 2;
+      tx.strokeStyle='#6a5a40'; tx.lineWidth=Math.max(1,fw/8);
+      tx.beginPath(); tx.moveTo(fx, fy); tx.lineTo(fx, fy - pole); tx.stroke();
+      tx.fillStyle = x.d.color;
+      tx.beginPath();
+      tx.moveTo(fx, fy - pole);
+      tx.lineTo(fx + fw, fy - pole + fh/2);
+      tx.lineTo(fx, fy - pole + fh);
+      tx.closePath(); tx.fill();
+    });
+  }
+
   // Avatar near castle gate
   const avImg = townImg('avatar.png', drawTown);
   const avX = cx + cw * 0.45, avY = cy + ch - 2;
@@ -2892,12 +2920,19 @@ function townPlotClick(i){
     });
   } else {
     openTownModal('BUILD ON PLOT ' + (i+1), body => {
+      const builtKeys = Object.values(town.plots||{}).map(b=>b.key);
       STRUCTURES.forEach(s => {
         const row = document.createElement('div'); row.className='shopRow';
         const info = document.createElement('div'); info.className='shopInfo';
         const nm = document.createElement('div'); nm.className='shopName'; nm.textContent=s.name;
         const desc = document.createElement('div'); desc.className='shopDesc'; desc.textContent='COST: '+s.cost+' GOLD';
         info.appendChild(nm); info.appendChild(desc); row.appendChild(info);
+        // Each structure is built once — the town is a collection, not a grid of copies
+        if(builtKeys.includes(s.key)){
+          const ow=document.createElement('span'); ow.className='shopOwned'; ow.textContent='✓ BUILT';
+          row.appendChild(ow); body.appendChild(row);
+          return;
+        }
         const btn = document.createElement('button'); btn.className='shopBuy';
         btn.textContent = 'BUILD '+s.cost+'⚜';
         btn.disabled = (EXPEDITION.gold||0) < s.cost;
@@ -2948,28 +2983,34 @@ function townCastleClick(){
   });
 }
 
+// Hit test shared by click + hover: returns 'castle', a plot index, or null
+function townHitTest(e){
+  const rect = tc.getBoundingClientRect();
+  const mx2 = (e.clientX - rect.left) * (tc.width / rect.width);
+  const my2 = (e.clientY - rect.top) * (tc.height / rect.height);
+  const W = tc.width, H = tc.height;
+  const cl = TOWN_LAYOUT.castle;
+  const cx = cl.x*W - cl.w*W/2, cy = cl.y*H - cl.h*H/2;
+  if(mx2>=cx && mx2<=cx+cl.w*W && my2>=cy && my2<=cy+cl.h*H) return 'castle';
+  for(let i=0; i<TOWN_LAYOUT.plots.length; i++){
+    const pl = TOWN_LAYOUT.plots[i];
+    const px2=pl.x*W-pl.w*W/2, py2=pl.y*H-pl.h*H/2;
+    if(mx2>=px2 && mx2<=px2+pl.w*W && my2>=py2 && my2<=py2+pl.h*H) return i;
+  }
+  return null;
+}
+// Pointer cursor over the castle and plots so the canvas reads as interactive
+tc.addEventListener('mousemove', e => {
+  if(!townVisible()) return;
+  tc.style.cursor = townHitTest(e)===null ? 'default' : 'pointer';
+});
+
 // Town canvas click handler
 tc.addEventListener('click', e => {
   if(!townVisible()) return;
-  const rect = tc.getBoundingClientRect();
-  const scaleX = tc.width / rect.width;
-  const scaleY = tc.height / rect.height;
-  const mx2 = (e.clientX - rect.left) * scaleX;
-  const my2 = (e.clientY - rect.top) * scaleY;
-  const W = tc.width, H = tc.height;
-
-  // Check castle
-  const cl = TOWN_LAYOUT.castle;
-  const cx = cl.x*W - cl.w*W/2, cy = cl.y*H - cl.h*H/2;
-  const cw = cl.w*W, ch = cl.h*H;
-  if(mx2>=cx && mx2<=cx+cw && my2>=cy && my2<=cy+ch){ townCastleClick(); return; }
-
-  // Check plots
-  for(let i=0; i<TOWN_LAYOUT.plots.length; i++){
-    const pl = TOWN_LAYOUT.plots[i];
-    const px2=pl.x*W-pl.w*W/2, py2=pl.y*H-pl.h*H/2, pw=pl.w*W, ph=pl.h*H;
-    if(mx2>=px2 && mx2<=px2+pw && my2>=py2 && my2<=py2+ph){ townPlotClick(i); return; }
-  }
+  const hit = townHitTest(e);
+  if(hit==='castle') townCastleClick();
+  else if(hit!==null) townPlotClick(hit);
 });
 
 
