@@ -1865,10 +1865,6 @@ function renderList(){
   el.appendChild(buildTodayStrip());
   const sqEl=document.createElement('div'); sqEl.id='sqCard'; el.appendChild(sqEl);
   drawSideQuestCard();
-  // Side quest card
-  const sqDiv = document.createElement('div'); sqDiv.id='sqCard';
-  el.appendChild(sqDiv);
-  drawSideQuestCard();
   const order=DOMAINS.map((_,i)=>i).sort((a,b)=>{
     const ao=domainStatus(a)==='BESIEGED',bo=domainStatus(b)==='BESIEGED';
     if(ao!==bo) return ao?-1:1;
