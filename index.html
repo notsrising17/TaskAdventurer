@@ -894,6 +894,9 @@ function updatePortraits(){
       prog.textContent='LV '+lv+' · '+deeds+' DEEDS · '+wkLeagues+' LEAGUES THIS WK';
     }
   });
+  const bb=document.getElementById('partyBestBanner');
+  if(bb&&EXPEDITION.best>0) bb.textContent='LONGEST EXPEDITION: '+(EXPEDITION.best||0)+' LEAGUES';
+  else if(bb) bb.textContent='NO EXPEDITION RECORDS YET';
 }
 function updatePortrait(){ updatePortraits(); }
 
@@ -1860,6 +1863,8 @@ function renderList(){
   const el=document.getElementById('listBody'); el.innerHTML='';
   const offerEl=buildTokenOffer(); if(offerEl) el.appendChild(offerEl);
   el.appendChild(buildTodayStrip());
+  const sqEl=document.createElement('div'); sqEl.id='sqCard'; el.appendChild(sqEl);
+  drawSideQuestCard();
   // Side quest card
   const sqDiv = document.createElement('div'); sqDiv.id='sqCard';
   el.appendChild(sqDiv);
