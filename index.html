@@ -972,13 +972,36 @@ function loadExp(){
 }
 function saveExp(){ try{ localStorage.setItem(EXP_KEY,JSON.stringify(EXPEDITION)); }catch(e){} }
 // Every upgrade effect routes through this one derivation
+// Town structures contribute too — see townBuffs(). Built once, permanent.
+function townBuffs(){
+  const plots=((EXPEDITION.town||{}).plots)||{};
+  const keys=Object.values(plots).map(b=>b.key);
+  const has=k=>keys.includes(k);
+  return {
+    start:(has('well')?2:0)+(has('chapel')?1:0),
+    crit:(has('smithy')?0.03:0),
+    landmarkGold:(has('market')?2:0),
+    leagueBonus:(has('statue')?1:0),
+  };
+}
 function expMods(){
   const u=EXPEDITION.upgrades||{};
+  const tb=townBuffs();
   return {
-    start:[0,3,6,10][u.trailhead||0]||0,
-    critRate:Math.min(0.16,0.10+0.03*(u.lucky||0)),
-    landmarkGold:3+(u.mule?2:0),
+    start:([0,3,6,10][u.trailhead||0]||0)+tb.start,
+    critRate:Math.min(0.16,0.10+0.03*(u.lucky||0)+tb.crit),
+    landmarkGold:3+(u.mule?2:0)+tb.landmarkGold,
+    leagueBonus:tb.leagueBonus,
   };
+}
+// A domain's completions earn more once its deeds level is high — the
+// "veteran" perk. LV3 → +1 league, LV5 → +2. Ties leveling to real power.
+function domainLeagueBonus(di){
+  if(di<0||di>=DOMAINS.length) return 0;
+  const lv=deedsLevel((EXPEDITION.deeds||[])[di]||0);
+  if(lv>=5) return 2;
+  if(lv>=3) return 1;
+  return 0;
 }
 function weekEndStr(){ return advanceDue(mondayStr(),6); }
 function dueThisWeek(t){ return !!t.due&&t.due>=mondayStr()&&t.due<=weekEndStr(); }
@@ -994,7 +1017,11 @@ function leagueBase(t){
 // Every grant is ledgered so undo can subtract exactly what was given.
 function earnLeagues(t,ev,crit){
   const base=leagueBase(t); if(base<=0) return 0;
-  const amt=crit?base*2:base;
+  let amt=crit?base*2:base;
+  // Flat bonuses (not doubled by crit, so goal math stays predictable):
+  amt+=expMods().leagueBonus;                 // STATUE town buff
+  amt+=domainLeagueBonus(t.domain||0);        // deed-level veteran perk
+  if(t.type===T_HABIT&&(t.wkStreak||0)>=4) amt+=1; // habit momentum: ≥4-week streak
   const before=Math.floor(EXPEDITION.leagues/LANDMARK_EVERY);
   EXPEDITION.leagues+=amt;
   EXPEDITION.reps=(EXPEDITION.reps||0)+1;
@@ -1710,8 +1737,11 @@ function buildQuestRow(task,onUpdate){
 function buildParentRow(task){
   const kids=state.tasks.filter(c=>c.parentId===task.id);
   const done=kids.filter(c=>c.done).length;
+  const total=kids.length||1;
+  const hpFrac=Math.max(0,1-done/total); // boss HP drains as encounters fall
   const div=document.createElement('div');
   div.className='task domain-'+(task.domain||0)+(task.done?' done':'');
+  div.style.flexWrap='wrap';
   const name=document.createElement('div'); name.className='tname'; name.textContent='⚑ '+task.name;
   const meta=document.createElement('div'); meta.className='tmeta';
   const pr=document.createElement('div'); pr.className='ttype';
@@ -1721,6 +1751,15 @@ function buildParentRow(task){
   const del=document.createElement('button'); del.className='del'; del.textContent='X';
   del.onclick=()=>deleteTask(task.id);
   div.appendChild(del);
+  // Boss HP bar — full width below the row, drains green→red as children clear
+  if(!task.done){
+    const bar=document.createElement('div');
+    bar.style.cssText='flex:1 1 100%;height:6px;background:#1a0a0a;border:1px solid #6a2030;margin-top:4px;overflow:hidden;';
+    const fill=document.createElement('div');
+    const hue=Math.round(hpFrac*120); // 120=green at full, 0=red near death
+    fill.style.cssText='height:100%;width:'+Math.round(hpFrac*100)+'%;transition:width .3s;background:hsl('+hue+',70%,45%);';
+    bar.appendChild(fill); div.appendChild(bar);
+  }
   return div;
 }
 
@@ -1765,6 +1804,12 @@ function checkParents(){
       logEvent('done',t);
       incrementDeeds(t.domain||0,1); // keep live play consistent with the v6 deeds backfill
       showToast('⚑ '+t.name.toUpperCase().slice(0,22)+' CONQUERED!','#ffd700');
+      // The boss falls — make it feel like a kill
+      if(!REDUCED_MOTION){
+        const f=document.getElementById('critFlash');
+        if(f){ f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+        for(let k=0;k<3;k++) setTimeout(()=>sparkleParty(),k*120);
+      }
     }
   });
 }
@@ -2647,17 +2692,19 @@ const CASTLE_TIERS = [
   {name:'CASTLE', cost:300},
   {name:'GRAND CASTLE', cost:600},
 ];
+// bonus: routed through townBuffs()/expMods(). Unlisted structures are
+// purely cosmetic — built for the skyline, not the stat line.
 const STRUCTURES = [
-  {key:'well',    name:'WELL',         cost:20},
+  {key:'well',    name:'WELL',         cost:20,  bonus:'+2 START LEAGUES EACH WEEK'},
   {key:'garden',  name:'GARDEN',       cost:25},
   {key:'cottage', name:'COTTAGE',      cost:35},
-  {key:'market',  name:'MARKET STALL', cost:40},
+  {key:'market',  name:'MARKET STALL', cost:40,  bonus:'+2 GOLD PER LANDMARK'},
   {key:'tavern',  name:'TAVERN',       cost:50},
-  {key:'smithy',  name:'SMITHY',       cost:60},
-  {key:'chapel',  name:'CHAPEL',       cost:75},
+  {key:'smithy',  name:'SMITHY',       cost:60,  bonus:'+3% CRITICAL HIT CHANCE'},
+  {key:'chapel',  name:'CHAPEL',       cost:75,  bonus:'+1 START LEAGUE EACH WEEK'},
   {key:'fountain',name:'FOUNTAIN',     cost:80},
   {key:'walls',   name:'WALLS',        cost:100},
-  {key:'statue',  name:'STATUE',       cost:150},
+  {key:'statue',  name:'STATUE',       cost:150, bonus:'+1 LEAGUE PER COMPLETION'},
 ];
 
 const tc = document.getElementById('townCanvas');
@@ -2953,6 +3000,11 @@ function townPlotClick(i){
       const d = document.createElement('div'); d.style.cssText='font-size:9px;color:#9a8ad0;letter-spacing:1px;line-height:1.8;';
       d.innerHTML = 'BUILT: ' + (built.boughtDate||'UNKNOWN') + '<br>PLOT: ' + (i+1);
       body.appendChild(d);
+      if(struct && struct.bonus){
+        const b = document.createElement('div'); b.style.cssText='font-size:9px;color:#c8a840;letter-spacing:1px;line-height:1.8;margin-top:4px;';
+        b.textContent = '⚜ ACTIVE: ' + struct.bonus;
+        body.appendChild(b);
+      }
     });
   } else {
     openTownModal('BUILD ON PLOT ' + (i+1), body => {
@@ -2961,7 +3013,9 @@ function townPlotClick(i){
         const row = document.createElement('div'); row.className='shopRow';
         const info = document.createElement('div'); info.className='shopInfo';
         const nm = document.createElement('div'); nm.className='shopName'; nm.textContent=s.name;
-        const desc = document.createElement('div'); desc.className='shopDesc'; desc.textContent='COST: '+s.cost+' GOLD';
+        const desc = document.createElement('div'); desc.className='shopDesc';
+        desc.textContent='COST: '+s.cost+' GOLD'+(s.bonus?' · ⚜ '+s.bonus:'');
+        if(s.bonus) desc.style.color='#c8a840';
         info.appendChild(nm); info.appendChild(desc); row.appendChild(info);
         // Each structure is built once — the town is a collection, not a grid of copies
         if(builtKeys.includes(s.key)){
@@ -3350,7 +3404,9 @@ function renderFocusPanel(){
   document.getElementById('focusName').textContent=d.name; document.getElementById('focusName').style.color=d.color;
   document.getElementById('focusDest').textContent='► '+d.dest;
   const fl=domainWeekLeagues(focusIdx);
-  document.getElementById('focusStep').textContent='🥾 '+fl+' LEAGUE'+(fl===1?'':'S')+' THIS WEEK';
+  const perk=domainLeagueBonus(focusIdx);
+  document.getElementById('focusStep').textContent='🥾 '+fl+' LEAGUE'+(fl===1?'':'S')+' THIS WEEK'
+    +(perk>0?'  ·  ⚔ VETERAN +'+perk+'/DEED':'');
   const fs=document.getElementById('focusStatus'); fs.innerHTML=''; fs.appendChild(statusChip(focusIdx));
   const av=document.getElementById('focusAvatar');
   renderPortraitCanvas(av,d,focusIdx,domainArtLevel(focusIdx));

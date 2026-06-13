@@ -703,6 +703,62 @@ r = await page.evaluate(() => {
 });
 check('deeds: toggleTask +1 and un-toggle −1', r.a === 1 && r.b === 0, JSON.stringify(r));
 
+// ---------- 16b. game-mechanic upgrades (town buffs, perks, momentum) ----------
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  const bare = expMods();
+  // town buffs: well +2 start, chapel +1 start, market +2 landmarkGold,
+  // smithy +crit, statue +1 leagueBonus
+  EXPEDITION.town = { castleTier: 1, plots: {
+    0: { key: 'well' }, 1: { key: 'chapel' }, 2: { key: 'market' },
+    3: { key: 'smithy' }, 4: { key: 'statue' } } };
+  const buffed = expMods();
+  return { bareStart: bare.start, bareLB: bare.leagueBonus, bareLG: bare.landmarkGold,
+    start: buffed.start, leagueBonus: buffed.leagueBonus, landmarkGold: buffed.landmarkGold,
+    crit: Math.round(buffed.critRate * 100) / 100 };
+});
+check('town buffs: well+chapel give +3 start leagues', r.bareStart === 0 && r.start === 3, JSON.stringify(r));
+check('town buffs: market gives +2 landmark gold (3→5)', r.bareLG === 3 && r.landmarkGold === 5, JSON.stringify(r));
+check('town buffs: statue gives +1 league per completion', r.bareLB === 0 && r.leagueBonus === 1, JSON.stringify(r));
+check('town buffs: smithy raises crit rate to 13%', r.crit === 0.13, JSON.stringify(r));
+
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  const lv0 = domainLeagueBonus(0);
+  EXPEDITION.deeds = [55, 25, 9, 0, 0]; // domain0=LV3, domain1=LV2, domain2=LV0
+  return { lv0, d0: domainLeagueBonus(0), d1: domainLeagueBonus(1), d2: domainLeagueBonus(2),
+    tavern: domainLeagueBonus(-1) };
+});
+check('perks: domainLeagueBonus LV3→+1, below→0, tavern→0',
+  r.lv0 === 0 && r.d0 === 1 && r.d1 === 0 && r.d2 === 0 && r.tavern === 0, JSON.stringify(r));
+r = await page.evaluate(() => { EXPEDITION.deeds = [10, 0, 0, 0, 0]; EXPEDITION.deeds[0] = 1000; return domainLeagueBonus(0); });
+check('perks: very high deeds (LV≥5) → +2', r === 2, JSON.stringify(r));
+
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.deeds = [55, 0, 0, 0, 0]; // domain0 LV3 → +1 veteran
+  EXPEDITION.town = { castleTier: 1, plots: { 0: { key: 'statue' } } }; // +1 leagueBonus
+  const streakHabit = { id: 950, name: 'H', domain: 0, type: 1, wkStreak: 4 };
+  const freshHabit = { id: 951, name: 'H2', domain: 0, type: 1, wkStreak: 1 };
+  const a = earnLeagues(streakHabit, 'habit', false); // base1 +statue1 +veteran1 +momentum1 = 4
+  const b = earnLeagues(freshHabit, 'habit', false);  // base1 +statue1 +veteran1            = 3
+  return { a, b };
+}, {});
+check('momentum: ≥4-week streak habit earns +1 (stacks with buffs → 4)', r.a === 4, JSON.stringify(r));
+check('momentum: fresh-streak habit gets buffs but no momentum → 3', r.b === 3, JSON.stringify(r));
+
+// boss HP bar renders and undo subtracts the exact bonused amount via ledger
+r = await page.evaluate(() => {
+  EXPEDITION = expDefaults();
+  EXPEDITION.deeds = [55, 0, 0, 0, 0];
+  const q = { id: 960, name: 'Q', domain: 0, type: 0, due: null };
+  const gained = earnLeagues(q, 'done', false); // base2 + veteran1 = 3
+  const after = EXPEDITION.leagues;
+  const refunded = refundLeagues(q, 'done');
+  return { gained, after, refunded, back: EXPEDITION.leagues };
+});
+check('perks: bonused grant is ledgered and refunds exactly', r.gained === 3 && r.refunded === 3 && r.back === 0, JSON.stringify(r));
+
 // ---------- 17. side quests ----------
 r = await page.evaluate(() => {
   const sqs = [
