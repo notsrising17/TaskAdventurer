@@ -919,7 +919,7 @@ function updatePortraits(){
     const cv=document.getElementById('portImg'+i); if(cv) renderPortraitCanvas(cv,d,i,lvl);
     const sc=document.getElementById('portSprite'+i); if(sc) renderSpriteCanvas(sc,d,i);
     const cw=document.getElementById('portChip'+i);
-    if(cw){ cw.innerHTML=''; cw.appendChild(statusChip(i)); }
+    if(cw){ cw.innerHTML=''; const ch=statusChip(i); if(ch) cw.appendChild(ch); }
     // Active state if focus open
     const card=document.getElementById('pc'+i); if(card) card.classList.toggle('active',focusIdx===i);
     // Progression block
@@ -1485,6 +1485,8 @@ function domainStatus(idx){
 function domainArtLevel(){ return 0; }
 function statusChip(idx){
   const st=domainStatus(idx);
+  // BEHIND is intentionally not surfaced as a badge — too naggy for ADHD users.
+  if(st==='BEHIND') return null;
   const chip=document.createElement('span'); chip.className='status-chip';
   chip.textContent=st; chip.style.color=STATUS_INFO[st].color; chip.style.borderColor=STATUS_INFO[st].color;
   if(STATUS_INFO[st].level>0) chip.classList.add('urgent');
@@ -1993,7 +1995,7 @@ function renderList(){
     const head=document.createElement('div'); head.className='dgHead';
     const cls=document.createElement('span'); cls.className='dgCls'; cls.style.color=d.color;
     cls.textContent=d.cls+' — '+d.name;
-    head.appendChild(cls); head.appendChild(statusChip(di));
+    head.appendChild(cls); const dch=statusChip(di); if(dch) head.appendChild(dch);
     grp.appendChild(head);
     if(!tasks.length){
       // Collapsed empty domain: header + add prompt only
@@ -3487,7 +3489,7 @@ function renderFocusPanel(){
   const perk=domainLeagueBonus(focusIdx);
   document.getElementById('focusStep').textContent='🥾 '+fl+' LEAGUE'+(fl===1?'':'S')+' THIS WEEK'
     +(perk>0?'  ·  ⚔ VETERAN +'+perk+'/DEED':'');
-  const fs=document.getElementById('focusStatus'); fs.innerHTML=''; fs.appendChild(statusChip(focusIdx));
+  const fs=document.getElementById('focusStatus'); fs.innerHTML=''; const fch=statusChip(focusIdx); if(fch) fs.appendChild(fch);
   const av=document.getElementById('focusAvatar');
   renderPortraitCanvas(av,d,focusIdx,domainArtLevel(focusIdx));
   av.style.borderColor=d.color;
