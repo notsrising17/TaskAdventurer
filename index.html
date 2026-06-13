@@ -2860,18 +2860,23 @@ function drawTownFrame(time){
         drawTownPlaceholder(tx, px, py, pw, ph, struct?struct.name:built.key, '#1a2a3a');
       }
     } else {
-      tx.fillStyle = 'rgba(255,215,0,0.04)';
+      // Empty buildable lot — read as an inviting foundation, not a broken
+      // image. A warm pad, a clear gold dashed frame, a big +, a BUILD caption.
+      tx.fillStyle = 'rgba(58,46,92,0.45)';
       tx.fillRect(px, py, pw, ph);
-      tx.strokeStyle = '#3a3060';
-      tx.lineWidth = 1;
-      tx.setLineDash([4, 4]);
-      tx.strokeRect(px+1, py+1, pw-2, ph-2);
+      tx.strokeStyle = 'rgba(255,215,0,0.55)';
+      tx.lineWidth = 2;
+      tx.setLineDash([5, 4]);
+      tx.strokeRect(px+1.5, py+1.5, pw-3, ph-3);
       tx.setLineDash([]);
-      tx.fillStyle = '#4a4068';
-      tx.font = Math.max(6, Math.min(9, pw/8)) + 'px "Press Start 2P",monospace';
+      tx.fillStyle = 'rgba(255,215,0,0.9)';
+      tx.font = Math.max(11, Math.min(18, pw/3.5)) + 'px "Press Start 2P",monospace';
       tx.textAlign = 'center';
       tx.textBaseline = 'middle';
-      tx.fillText('+', px+pw/2, py+ph/2);
+      tx.fillText('+', px+pw/2, py+ph/2 - ph*0.08);
+      tx.fillStyle = 'rgba(200,168,64,0.85)';
+      tx.font = Math.max(5, Math.min(8, pw/9)) + 'px "Press Start 2P",monospace';
+      tx.fillText('BUILD', px+pw/2, py+ph/2 + ph*0.24);
     }
   });
 
@@ -2927,7 +2932,8 @@ function drawTownFrame(time){
   const hudBest = EXPEDITION.best||0;
   const bestGap = hudBest>5 ? (hudBest - Math.floor(EXPEDITION.leagues||0)) : 0;
   const paceStr = bestGap>0&&bestGap<=5 ? ' · ⚑ '+bestGap+' TO RECORD' : (bestGap<=0&&hudBest>5?' · ⚑ RECORD PACE':'');
-  tx.fillText(Math.floor(EXPEDITION.leagues||0)+' LEAGUES · ⛺ '+nextIn+' TO LANDMARK'+paceStr, W/2, topOff + 54*s);
+  const lgNow = Math.floor(EXPEDITION.leagues||0);
+  tx.fillText(lgNow+(lgNow===1?' LEAGUE':' LEAGUES')+' · ⛺ '+nextIn+' TO LANDMARK'+paceStr, W/2, topOff + 54*s);
 
   // Coin flights
   coinFlights = coinFlights.filter(f => {
