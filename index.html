@@ -1011,8 +1011,7 @@ function saveExp(){ try{ localStorage.setItem(EXP_KEY,JSON.stringify(EXPEDITION)
 // Every upgrade effect routes through this one derivation
 // Town structures contribute too — see townBuffs(). Built once, permanent.
 function townBuffs(){
-  const plots=((EXPEDITION.town||{}).plots)||{};
-  const keys=Object.values(plots).map(b=>b.key);
+  const keys=townBuildings().map(b=>b.key);
   const has=k=>keys.includes(k);
   return {
     start:(has('well')?2:0)+(has('chapel')?1:0),
@@ -1574,7 +1573,7 @@ function maybeShowRollover(){
     body.textContent=p.leagues+' LEAGUES, '+p.landmarks+' LANDMARK'+(p.landmarks===1?'':'S')+'. +'+p.gold+' GOLD.';
     if(sub) sub.textContent='A FRESH START — YOUR SLATE IS CLEAN.';
     // Point the gold at the town: name the best structure it can now buy
-    const builtKeys=Object.values((EXPEDITION.town||{}).plots||{}).map(b=>b.key);
+    const builtKeys=townBuildings().map(b=>b.key);
     const affordable=STRUCTURES.filter(s=>!builtKeys.includes(s.key)&&s.cost<=(EXPEDITION.gold||0));
     if(affordable.length){
       const best=affordable[affordable.length-1];
@@ -2800,6 +2799,43 @@ function townImg(name, onLoad){
 // Coin flight state
 let coinFlights = [];
 let _townRafId = null;
+// Free-placement state: which structure (if any) is being repositioned,
+// and the draw-rects of the last-rendered buildings for hit-testing.
+let placingKey = null;
+let _townHits = [];
+
+// Buildings the player has placed. Each is {key, x, y, date} with x/y as
+// normalised canvas coords so players arrange their own town. Legacy saves
+// stored fixed plots — migrate them to coordinates on first access.
+function townBuildings(){
+  const town = EXPEDITION.town || (EXPEDITION.town = {castleTier:1});
+  if(!Array.isArray(town.buildings)){
+    town.buildings = [];
+    const hadLegacy = town.plots && typeof town.plots === 'object';
+    if(hadLegacy){
+      Object.keys(town.plots).forEach(idx => {
+        const b = town.plots[idx]; if(!b || !b.key) return;
+        const pl = TOWN_LAYOUT.plots[idx] || {x:0.5, y:0.72};
+        town.buildings.push({key:b.key, x:pl.x, y:pl.y, date:b.boughtDate||todayStr()});
+      });
+    }
+    delete town.plots;
+    if(hadLegacy && typeof saveExp === 'function') saveExp(); // persist the migration
+  }
+  return town.buildings;
+}
+
+// Buildings nearer the foreground (lower on screen) render larger — a simple
+// depth cue that makes hand-placed layouts read as a real settlement.
+function buildingDrawRect(b, W, H, img){
+  const HORIZON = H * 0.34;
+  const t = Math.max(0, Math.min(1, (b.y*H - HORIZON) / (H - HORIZON)));
+  const dw = (0.20 + 0.20*t) * W;            // distant ~0.20W, near ~0.40W
+  const ar = (img && img.naturalWidth) ? img.naturalHeight/img.naturalWidth : 1.1;
+  const dh = dw * ar;
+  const baseX = b.x * W, baseY = b.y * H;    // bottom-centre anchor
+  return {dw, dh, baseX, baseY, x: baseX - dw/2, y: baseY - dh, t};
+}
 
 function drawTownPlaceholder(ctx, x, y, w, h, label, color){
   ctx.fillStyle = color || '#1a1438';
@@ -2918,36 +2954,29 @@ function drawTownFrame(time){
     tx.fillText(castleInfo.name, cx+cw/2, cy+ch/2);
   }
 
-  // Plots — drawn back-to-front so nearer buildings overlap farther ones,
-  // each grounded on the field (aspect preserved, bottom-anchored, soft
-  // shadow) so the town reads as one cohesive settlement, not scattered tiles.
-  TOWN_LAYOUT.plots.forEach((pl, i) => {
-    const px = Math.round(pl.x * W - pl.w * W / 2);
-    const py = Math.round(pl.y * H - pl.h * H / 2);
-    const pw = Math.round(pl.w * W);
-    const ph = Math.round(pl.h * H);
-    const built = (town.plots||{})[i];
-    if(!built) return; // empty plot — field shows through; click still builds
-    const struct = STRUCTURES.find(s=>s.key===built.key);
-    const sImg = townImg(built.key + '.png', drawTown);
-    const baseX = px + pw/2;          // ground contact centred on the plot
-    const baseY = py + ph;            // structures stand on the plot's base line
+  // Buildings — hand-placed by the player. Drawn back-to-front (sorted by y)
+  // so nearer ones overlap farther, each grounded with a soft shadow and
+  // depth-scaled so the town reads as one cohesive settlement.
+  _townHits = [];
+  townBuildings().slice().sort((a,b)=>a.y-b.y).forEach(b => {
+    const struct = STRUCTURES.find(s=>s.key===b.key);
+    const sImg = townImg(b.key + '.png', drawTown);
+    const r = buildingDrawRect(b, W, H, sImg);
     // Soft contact shadow so the building sits on the grass, not floats
     tx.save();
     tx.fillStyle = 'rgba(0,0,0,0.28)';
     tx.beginPath();
-    tx.ellipse(baseX, baseY, pw*0.42, ph*0.16, 0, 0, Math.PI*2);
+    tx.ellipse(r.baseX, r.baseY, r.dw*0.34, r.dw*0.10, 0, 0, Math.PI*2);
     tx.fill();
     tx.restore();
+    if(placingKey === b.key) tx.globalAlpha = 0.4; // the one being moved is ghosted
     if(sImg.complete && !sImg._failed && sImg.naturalWidth > 0){
-      // Aspect-preserve, give the building presence (wider than the bare plot),
-      // and rise upward from the base line.
-      const dw = pw * 1.7;
-      const dh = sImg.naturalHeight * (dw / sImg.naturalWidth);
-      tx.drawImage(sImg, Math.round(baseX - dw/2), Math.round(baseY - dh), Math.round(dw), Math.round(dh));
+      tx.drawImage(sImg, Math.round(r.x), Math.round(r.y), Math.round(r.dw), Math.round(r.dh));
     } else {
-      drawTownPlaceholder(tx, px, py, pw, ph, struct?struct.name:built.key, '#1a2a3a');
+      drawTownPlaceholder(tx, r.x, r.y, r.dw, r.dh, struct?struct.name:b.key, '#1a2a3a');
     }
+    tx.globalAlpha = 1;
+    _townHits.push({key:b.key, x:r.x, y:r.y, w:r.dw, h:r.dh});
   });
 
   // Class banners over the castle — one per domain at level 3+, in class color.
@@ -3004,6 +3033,19 @@ function drawTownFrame(time){
   const paceStr = bestGap>0&&bestGap<=5 ? ' · ⚑ '+bestGap+' TO RECORD' : (bestGap<=0&&hudBest>5?' · ⚑ RECORD PACE':'');
   const lgNow = Math.floor(EXPEDITION.leagues||0);
   tx.fillText(lgNow+(lgNow===1?' LEAGUE':' LEAGUES')+' · ⛺ '+nextIn+' TO LANDMARK'+paceStr, W/2, topOff + 54*s);
+
+  // Placement hint — shown while the player is choosing where a building goes
+  if(placingKey){
+    const ps = STRUCTURES.find(x=>x.key===placingKey);
+    const by = topOff + 68*s, bh = Math.round(18*s);
+    tx.fillStyle = 'rgba(0,0,0,0.65)';
+    tx.fillRect(0, by, W, bh);
+    tx.fillStyle = '#ffd700';
+    tx.textAlign = 'center'; tx.textBaseline = 'middle';
+    tx.font = Math.round(7*s) + 'px "Press Start 2P",monospace';
+    tx.fillText('TAP THE GROUND TO PLACE ' + (ps?ps.name:placingKey), W/2, by + bh/2);
+    tx.textBaseline = 'alphabetic';
+  }
 
   // Coin flights
   coinFlights = coinFlights.filter(f => {
@@ -3070,54 +3112,83 @@ function openTownModal(title, bodyFn){
   document.getElementById('townBuildWrap').classList.add('open');
 }
 
-function townPlotClick(i){
-  const town = EXPEDITION.town || {castleTier:1, plots:{}};
-  const built = (town.plots||{})[i];
-  if(built){
-    const struct = STRUCTURES.find(s=>s.key===built.key);
-    openTownModal(struct ? struct.name : built.key, body => {
-      const d = document.createElement('div'); d.style.cssText='font-size:9px;color:#9a8ad0;letter-spacing:1px;line-height:1.8;';
-      d.innerHTML = 'BUILT: ' + (built.boughtDate||'UNKNOWN') + '<br>PLOT: ' + (i+1);
-      body.appendChild(d);
-      if(struct && struct.bonus){
-        const b = document.createElement('div'); b.style.cssText='font-size:9px;color:#c8a840;letter-spacing:1px;line-height:1.8;margin-top:4px;';
-        b.textContent = '⚜ ACTIVE: ' + struct.bonus;
-        body.appendChild(b);
+// Clamp a placement to the grassy field so nothing lands in the sky or
+// off the edges.
+function clampPlacement(x, y){
+  return { x: Math.max(0.07, Math.min(0.93, x)),
+           y: Math.max(0.40, Math.min(0.97, y)) };
+}
+
+// Drop the building currently being moved at the tapped spot.
+function placeBuildingAt(key, x, y){
+  const p = clampPlacement(x, y);
+  const b = townBuildings().find(bb=>bb.key===key);
+  if(b){ b.x = p.x; b.y = p.y; }
+  placingKey = null;
+  saveExp(); drawTown();
+  showToast('⚜ PLACED', '#ffd700');
+}
+
+// Tapped an empty patch of ground — open the shop; whatever is bought lands
+// right where the player tapped, so building is a deliberate placement.
+function openBuildShop(gx, gy){
+  const built = townBuildings().map(b=>b.key);
+  openTownModal('BUILD HERE', body => {
+    const hint = document.createElement('div');
+    hint.style.cssText='font-size:8px;color:#6a5a90;letter-spacing:1px;line-height:1.7;margin-bottom:6px;';
+    hint.textContent='PICK A STRUCTURE — IT DROPS WHERE YOU TAPPED. TAP IT LATER TO MOVE IT.';
+    body.appendChild(hint);
+    STRUCTURES.forEach(s => {
+      const row = document.createElement('div'); row.className='shopRow';
+      const info = document.createElement('div'); info.className='shopInfo';
+      const nm = document.createElement('div'); nm.className='shopName'; nm.textContent=s.name;
+      const desc = document.createElement('div'); desc.className='shopDesc';
+      desc.textContent='COST: '+s.cost+' GOLD'+(s.bonus?' · ⚜ '+s.bonus:'');
+      if(s.bonus) desc.style.color='#c8a840';
+      info.appendChild(nm); info.appendChild(desc); row.appendChild(info);
+      // Each structure is built once — the town is a collection, not copies
+      if(built.includes(s.key)){
+        const ow=document.createElement('span'); ow.className='shopOwned'; ow.textContent='✓ BUILT';
+        row.appendChild(ow); body.appendChild(row);
+        return;
       }
+      const btn = document.createElement('button'); btn.className='shopBuy';
+      btn.textContent = 'BUILD '+s.cost+'⚜';
+      btn.disabled = (EXPEDITION.gold||0) < s.cost;
+      btn.onclick = () => {
+        if((EXPEDITION.gold||0) < s.cost) return;
+        EXPEDITION.gold -= s.cost;
+        const p = clampPlacement(gx, gy);
+        townBuildings().push({key:s.key, x:p.x, y:p.y, date:todayStr()});
+        saveExp(); drawTown(); renderStats(); closeTownModal();
+        showToast('⚜ '+s.name+' BUILT!', '#ffd700');
+      };
+      row.appendChild(btn);
+      body.appendChild(row);
     });
-  } else {
-    openTownModal('BUILD ON PLOT ' + (i+1), body => {
-      const builtKeys = Object.values(town.plots||{}).map(b=>b.key);
-      STRUCTURES.forEach(s => {
-        const row = document.createElement('div'); row.className='shopRow';
-        const info = document.createElement('div'); info.className='shopInfo';
-        const nm = document.createElement('div'); nm.className='shopName'; nm.textContent=s.name;
-        const desc = document.createElement('div'); desc.className='shopDesc';
-        desc.textContent='COST: '+s.cost+' GOLD'+(s.bonus?' · ⚜ '+s.bonus:'');
-        if(s.bonus) desc.style.color='#c8a840';
-        info.appendChild(nm); info.appendChild(desc); row.appendChild(info);
-        // Each structure is built once — the town is a collection, not a grid of copies
-        if(builtKeys.includes(s.key)){
-          const ow=document.createElement('span'); ow.className='shopOwned'; ow.textContent='✓ BUILT';
-          row.appendChild(ow); body.appendChild(row);
-          return;
-        }
-        const btn = document.createElement('button'); btn.className='shopBuy';
-        btn.textContent = 'BUILD '+s.cost+'⚜';
-        btn.disabled = (EXPEDITION.gold||0) < s.cost;
-        btn.onclick = () => {
-          if((EXPEDITION.gold||0) < s.cost) return;
-          EXPEDITION.gold -= s.cost;
-          if(!EXPEDITION.town) EXPEDITION.town = {castleTier:1, plots:{}};
-          EXPEDITION.town.plots[i] = {key:s.key, boughtDate:todayStr()};
-          saveExp(); drawTown(); renderStats(); closeTownModal();
-          showToast('⚜ '+s.name+' BUILT!', '#ffd700');
-        };
-        row.appendChild(btn);
-        body.appendChild(row);
-      });
-    });
-  }
+  });
+}
+
+// Tapped an existing building — show its details plus a MOVE / DEMOLISH action.
+function townBuildingClick(key){
+  const struct = STRUCTURES.find(s=>s.key===key);
+  const b = townBuildings().find(bb=>bb.key===key);
+  openTownModal(struct ? struct.name : key, body => {
+    const d = document.createElement('div'); d.style.cssText='font-size:9px;color:#9a8ad0;letter-spacing:1px;line-height:1.8;';
+    d.innerHTML = 'BUILT: ' + ((b&&b.date)||'UNKNOWN');
+    body.appendChild(d);
+    if(struct && struct.bonus){
+      const bn = document.createElement('div'); bn.style.cssText='font-size:9px;color:#c8a840;letter-spacing:1px;line-height:1.8;margin-top:4px;';
+      bn.textContent = '⚜ ACTIVE: ' + struct.bonus;
+      body.appendChild(bn);
+    }
+    const acts = document.createElement('div'); acts.style.cssText='display:flex;gap:6px;margin-top:10px;';
+    const mv = document.createElement('button'); mv.className='shopBuy';
+    mv.textContent = '✥ MOVE';
+    mv.onclick = () => { placingKey = key; closeTownModal(); drawTown(); showToast('TAP THE GROUND TO PLACE IT', '#ffd700'); };
+    acts.appendChild(mv);
+    body.appendChild(acts);
+  });
 }
 
 function townCastleClick(){
@@ -3152,37 +3223,60 @@ function townCastleClick(){
   });
 }
 
-// Hit test shared by click + hover: returns 'castle', a plot index, or null
-function townHitTest(e){
+// Normalised pointer coords (0–1) within the canvas.
+function townPointer(e){
   const rect = tc.getBoundingClientRect();
-  const mx2 = (e.clientX - rect.left) * (tc.width / rect.width);
-  const my2 = (e.clientY - rect.top) * (tc.height / rect.height);
+  return {
+    x: (e.clientX - rect.left) / rect.width,
+    y: (e.clientY - rect.top) / rect.height,
+  };
+}
+
+// Hit test shared by click + hover. Buildings (topmost/nearest first) take
+// priority, then the castle's central core, then bare ground below the
+// horizon. Returns {type:'building'|'castle'|'ground', ...} or null.
+function townHitTest(e){
+  const p = townPointer(e);
   const W = tc.width, H = tc.height;
+  const mx2 = p.x * W, my2 = p.y * H;
+  // Buildings: walk last-drawn rects in reverse so the front-most wins
+  for(let i=_townHits.length-1; i>=0; i--){
+    const h = _townHits[i];
+    if(mx2>=h.x && mx2<=h.x+h.w && my2>=h.y && my2<=h.y+h.h) return {type:'building', key:h.key};
+  }
+  // Castle: tighter central core so surrounding grass stays tappable
   const cl = TOWN_LAYOUT.castle;
   const ctier = ((EXPEDITION.town && EXPEDITION.town.castleTier) || 1) - 1;
   const cGrow = [0.82, 1.0, 1.18, 1.4][ctier] || 1;
-  const ccw = cl.w*W*cGrow, cch = cl.h*H*cGrow;
-  const cx = cl.x*W - ccw/2, cy = cl.y*H - cch/2;
-  if(mx2>=cx && mx2<=cx+ccw && my2>=cy && my2<=cy+cch) return 'castle';
-  for(let i=0; i<TOWN_LAYOUT.plots.length; i++){
-    const pl = TOWN_LAYOUT.plots[i];
-    const px2=pl.x*W-pl.w*W/2, py2=pl.y*H-pl.h*H/2;
-    if(mx2>=px2 && mx2<=px2+pl.w*W && my2>=py2 && my2<=py2+pl.h*H) return i;
-  }
+  const ccw = cl.w*W*cGrow*0.55, cch = cl.h*H*cGrow*0.7;
+  const cx = cl.x*W - ccw/2, cy = cl.y*H - cch*0.45;
+  if(mx2>=cx && mx2<=cx+ccw && my2>=cy && my2<=cy+cch) return {type:'castle'};
+  // Bare ground (field area) — a spot to build
+  if(my2 > H*0.34) return {type:'ground', x:p.x, y:p.y};
   return null;
 }
-// Pointer cursor over the castle and plots so the canvas reads as interactive
+// Pointer cursor over interactive areas
 tc.addEventListener('mousemove', e => {
   if(!townVisible()) return;
-  tc.style.cursor = townHitTest(e)===null ? 'default' : 'pointer';
+  if(placingKey){ tc.style.cursor = 'crosshair'; return; }
+  tc.style.cursor = townHitTest(e) ? 'pointer' : 'default';
 });
 
 // Town canvas click handler
 tc.addEventListener('click', e => {
   if(!townVisible()) return;
+  // While moving a building, the next tap drops it (or cancels if in the sky)
+  if(placingKey){
+    const p = townPointer(e);
+    if(p.y <= 0.34){ placingKey = null; drawTown(); return; } // tapped sky → cancel
+    placeBuildingAt(placingKey, p.x, p.y);
+    return;
+  }
   const hit = townHitTest(e);
-  if(hit==='castle') townCastleClick();
-  else if(hit!==null) townPlotClick(hit);
+  if(!hit) return;
+  if(hit.type==='castle') townCastleClick();
+  else if(hit.type==='building') townBuildingClick(hit.key);
+  else if(hit.type==='ground') openBuildShop(hit.x, hit.y);
 });
 
 
