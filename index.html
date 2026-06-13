@@ -602,7 +602,7 @@
   <div id="rollBox" class="glass">
     <div class="ck-title" id="rollTitle">THE EXPEDITION RETURNS</div>
     <div id="rollBody"></div>
-    <div class="ck-sub">A NEW ROUTE AWAITS.</div>
+    <div class="ck-sub" id="rollSub">A NEW ROUTE AWAITS.</div>
     <button id="rollShop" onclick="closeRollover();openShop()">⚜ VISIT THE OUTFITTER</button>
     <button id="rollDismiss" onclick="closeRollover()">ONWARD</button>
   </div>
@@ -1005,6 +1005,16 @@ function earnLeagues(t,ev,crit){
   saveExp();
   if(townVisible()) flyCoin(amt);
   if(after>before) setTimeout(()=>showToast('⛺ LANDMARK REACHED — LEAGUE '+(after*LANDMARK_EVERY)+'!','#44cc44'),700);
+  const best=EXPEDITION.best||0;
+  if(best>5){
+    const lb=EXPEDITION.leagues-amt;
+    if(lb<best&&EXPEDITION.leagues>=best)
+      setTimeout(()=>showToast('⚑ NEW WEEKLY RECORD — '+Math.floor(EXPEDITION.leagues)+' LEAGUES!','#ffd700'),900);
+    else if(lb<best-3&&EXPEDITION.leagues>=best-3){
+      const gap=Math.ceil(best-EXPEDITION.leagues);
+      setTimeout(()=>showToast('⚑ '+(gap<=0?'TYING YOUR RECORD!':gap+' LEAGUE'+(gap===1?'':'S')+' FROM YOUR RECORD!'),'#ffcc00'),900);
+    }
+  }
   return amt;
 }
 // Undo: pop the most recent matching grant, floor 0
@@ -1485,14 +1495,17 @@ function maybeShowRollover(){
   const title=document.getElementById('rollTitle');
   const body=document.getElementById('rollBody');
   const shopBtn=document.getElementById('rollShop');
+  const sub=document.getElementById('rollSub');
   if(p.rested){
     title.textContent='THE PARTY RESTED.';
     body.textContent=''; body.style.display='none';
     shopBtn.style.display='none';
+    if(sub) sub.textContent='A NEW ROUTE AWAITS.';
   } else {
     title.textContent='THE EXPEDITION RETURNS';
     body.style.display='';
     body.textContent=p.leagues+' LEAGUES, '+p.landmarks+' LANDMARK'+(p.landmarks===1?'':'S')+'. +'+p.gold+' GOLD.';
+    if(sub) sub.textContent='A FRESH START — YOUR SLATE IS CLEAN.';
     // Point the gold at the town: name the best structure it can now buy
     const builtKeys=Object.values((EXPEDITION.town||{}).plots||{}).map(b=>b.key);
     const affordable=STRUCTURES.filter(s=>!builtKeys.includes(s.key)&&s.cost<=(EXPEDITION.gold||0));
@@ -1832,7 +1845,7 @@ function buildTokenOffer(){
   if(!t){ META.offers.shift(); saveMeta(); return null; }
   const box=document.createElement('div'); box.className='dgroup tokenOffer';
   const msg=document.createElement('div'); msg.className='dgSub'; msg.style.color='#ffcc00';
-  msg.textContent='🔥 SPEND A CAMPFIRE TOKEN TO KEEP THE FIRE LIT? — '+t.name.toUpperCase().slice(0,28);
+  msg.textContent='🔥 DON\'T LOSE YOUR '+(offer.s||2)+'-WEEK STREAK — '+t.name.toUpperCase().slice(0,28)+'  ('+META.tokens+' TOKEN'+(META.tokens===1?'':'S')+' HELD)';
   const row=document.createElement('div'); row.style.display='flex'; row.style.gap='6px';
   const yes=document.createElement('button'); yes.className='miniBtn'; yes.textContent='🔥 SPEND ('+META.tokens+' HELD)';
   yes.onclick=()=>spendToken(true);
@@ -2654,7 +2667,24 @@ const REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-
 // hashStr is needed for side quests
 function hashStr(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
 
-function sparkleParty(){ }
+function sparkleParty(){
+  if(REDUCED_MOTION) return;
+  const cols=['#ffd700','#c8a840','#44cc44','#cc44aa','#d4884c','#ff8888','#88ccff','#2288aa'];
+  for(let i=0;i<10;i++){
+    const el=document.createElement('div');
+    const cx=15+Math.random()*70,cy=20+Math.random()*60;
+    el.style.cssText='position:fixed;z-index:80;pointer-events:none;width:5px;height:5px;'+
+      'background:'+cols[i%cols.length]+';left:'+cx+'vw;top:'+cy+'vh;'+
+      'transition:transform .65s ease-out,opacity .65s ease-out;';
+    document.body.appendChild(el);
+    const dx=(Math.random()-0.5)*100,dy=-30-Math.random()*90;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      el.style.transform='translate('+dx+'px,'+dy+'px)';
+      el.style.opacity='0';
+    }));
+    setTimeout(()=>el.remove(),750);
+  }
+}
 
 function fitTown(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
@@ -2844,7 +2874,10 @@ function drawTownFrame(time){
   tx.font = Math.round(7*s) + 'px "Press Start 2P",monospace';
   tx.fillStyle = '#9a8ad0';
   const nextIn = LANDMARK_EVERY - (Math.floor(EXPEDITION.leagues||0) % LANDMARK_EVERY) || LANDMARK_EVERY;
-  tx.fillText('THIS WEEK\'S EXPEDITION: ' + Math.floor(EXPEDITION.leagues||0) + ' LEAGUES · NEXT LANDMARK ' + nextIn, W/2, topOff + 54*s);
+  const hudBest = EXPEDITION.best||0;
+  const bestGap = hudBest>5 ? (hudBest - Math.floor(EXPEDITION.leagues||0)) : 0;
+  const paceStr = bestGap>0&&bestGap<=5 ? ' · ⚑ '+bestGap+' TO RECORD' : (bestGap<=0&&hudBest>5?' · ⚑ RECORD PACE':'');
+  tx.fillText(Math.floor(EXPEDITION.leagues||0)+' LEAGUES · ⛺ '+nextIn+' TO LANDMARK'+paceStr, W/2, topOff + 54*s);
 
   // Coin flights
   coinFlights = coinFlights.filter(f => {
@@ -3082,6 +3115,12 @@ function pickSQ(sqs, seedStr, exclude){
   return chosen[Math.abs(seed)%chosen.length]||sqs[0];
 }
 
+function sqDayStreak(){
+  const sideDays=new Set((state.events||[]).filter(e=>e.ev==='side').map(e=>localDateStr(new Date(e.t))));
+  let streak=0; const now=new Date();
+  for(let i=0;;i++){const d=new Date(now);d.setDate(d.getDate()-i);if(!sideDays.has(localDateStr(d)))break;streak++;}
+  return streak;
+}
 function drawSideQuestCard(){
   const el=document.getElementById('sqCard'); if(!el) return;
   const sq=todaySQ();
@@ -3102,7 +3141,8 @@ function drawSideQuestCard(){
     if(sq.done){
       const d=document.createElement('div'); d.className='dgroup';
       d.style.opacity='0.5';
-      d.innerHTML='<div class="dgSub" style="color:#44cc44;letter-spacing:1px;">📜 SIDE QUEST COMPLETE · '+cur.hook+'</div>';
+      const streak=sqDayStreak(); const streakTxt=streak>=2?' · '+streak+'-DAY STREAK 🔥':'';
+      d.innerHTML='<div class="dgSub" style="color:#44cc44;letter-spacing:1px;">📜 SIDE QUEST COMPLETE'+streakTxt+'</div>';
       el.appendChild(d);
       return;
     }

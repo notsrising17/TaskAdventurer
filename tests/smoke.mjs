@@ -390,7 +390,7 @@ r = await page.evaluate(() => {
   checkWeeklyReset(); // missed week on streak 4 → offer queued
   const offered = META.offers.length === 1;
   renderList();
-  const promptShown = document.body.innerText.includes('KEEP THE FIRE LIT');
+  const promptShown = document.body.innerText.includes("DON'T LOSE YOUR");
   spendToken(true);
   const entry = t.weekLog.find(e => e.w === '2000-01-03');
   return { offered, promptShown, hit: entry && entry.hit === 1, streak: t.wkStreak, tokens: META.tokens, offersLeft: META.offers.length };
