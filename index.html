@@ -2707,17 +2707,24 @@ function importData(file){
 }
 
 // ============ TOWN VIEW ============
+// Horizon is at H*0.34. All plot base-lines (y + h/2) must be below it.
+// Plots fan around the castle in 3/4-perspective depth: farther rows sit
+// higher on the canvas and use smaller plot sizes (parallax illusion).
 const TOWN_LAYOUT = {
-  castle: {x:0.5, y:0.44, w:0.36, h:0.30},
+  castle: {x:0.5, y:0.52, w:0.36, h:0.32},
   plots: [
-    {x:0.15, y:0.28, w:0.13, h:0.13},
-    {x:0.72, y:0.28, w:0.13, h:0.13},
-    {x:0.10, y:0.50, w:0.12, h:0.12},
-    {x:0.78, y:0.50, w:0.12, h:0.12},
-    {x:0.18, y:0.68, w:0.14, h:0.14},
-    {x:0.68, y:0.68, w:0.14, h:0.14},
-    {x:0.32, y:0.75, w:0.12, h:0.12},
-    {x:0.56, y:0.75, w:0.12, h:0.12},
+    // Far flanks — small, high, appear distant
+    {x:0.20, y:0.44, w:0.11, h:0.11},
+    {x:0.80, y:0.44, w:0.11, h:0.11},
+    // Mid flanks
+    {x:0.11, y:0.60, w:0.13, h:0.13},
+    {x:0.89, y:0.60, w:0.13, h:0.13},
+    // Foreground flanks
+    {x:0.18, y:0.76, w:0.14, h:0.14},
+    {x:0.82, y:0.76, w:0.14, h:0.14},
+    // Foreground center — either side of the path
+    {x:0.34, y:0.82, w:0.13, h:0.13},
+    {x:0.66, y:0.82, w:0.13, h:0.13},
   ]
 };
 const CASTLE_TIERS = [
