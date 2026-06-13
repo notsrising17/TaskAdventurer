@@ -55,7 +55,7 @@
   .portDest{font-size:8px;color:#6a5a90;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
   .portSprite{display:none;}
   body[data-tab=PARTY] .portDest{text-align:left;font-size:9px;}
-  body[data-tab=PARTY] .port-prog{font-size:9px;color:#8a7ab0;text-align:left;padding:0;}
+  body[data-tab=PARTY] .port-prog{font-size:9px;color:#8a7ab0;text-align:left;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   body[data-tab=PARTY] .portSprite{display:block;}
 
   /* Stats — slim bar, tap to expand */
@@ -364,7 +364,7 @@
     body[data-tab=PARTY] #listPanel{display:none;}
     body[data-tab=PARTY] #portraitCol{position:fixed;top:54px;left:0;right:0;bottom:52px;
       overflow-y:auto;padding:10px;gap:8px;background:#0a0818;}
-    body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:6px;padding:12px;align-items:stretch;}
+    body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:4px;padding:8px 10px;align-items:stretch;}
     body[data-tab=PARTY] .portRow{display:flex;align-items:flex-end;gap:10px;}
     body[data-tab=PARTY] .portPortrait{width:96px;height:96px;flex:0 0 96px;}
     body[data-tab=PARTY] .portSprite{width:52px;height:52px;flex:0 0 52px;}
@@ -757,8 +757,8 @@ function drawSheetPortrait(cv,sheetImg,lvl){
   const half=gridPx/2;
   const sx=(lvl===1||lvl===3)?half:0;
   const sy=(lvl>=2)?half:0;
-  // Center-crop the quadrant to fill dst
-  const scale=Math.max(cw/half,ch/half);
+  // Contain: show full quadrant without cropping
+  const scale=Math.min(cw/half,ch/half);
   const scaledW=half*scale,scaledH=half*scale;
   g.drawImage(sheetImg,sx,sy,half,half,(cw-scaledW)/2,(ch-scaledH)/2,scaledW,scaledH);
 }
@@ -838,18 +838,14 @@ function togglePartyHabits(di, panel){
 function renderSpriteCanvas(cv,d,idx){
   const g=cv.getContext('2d'),cw=cv.width,ch=cv.height;
   const spriteImg=domainSpriteImgs[idx];
-  g.clearRect(0,0,cw,ch);
-  const bg=g.createLinearGradient(0,0,0,ch);
-  bg.addColorStop(0,d.dark+'cc'); bg.addColorStop(1,'#0a0818cc');
-  g.fillStyle=bg; g.fillRect(0,0,cw,ch);
+  g.clearRect(0,0,cw,ch); // transparent — sprite PNGs carry their own alpha
+  g.imageSmoothingEnabled=false;
   if(spriteImg && spriteImg.complete && spriteImg.naturalWidth>0){
     const scale=Math.min(cw/spriteImg.naturalWidth,ch/spriteImg.naturalHeight);
     const sw=Math.round(spriteImg.naturalWidth*scale),sh=Math.round(spriteImg.naturalHeight*scale);
-    g.drawImage(spriteImg,(cw-sw)/2,(ch-sh)/2,sw,sh);
+    g.drawImage(spriteImg,Math.round((cw-sw)/2),Math.round((ch-sh)/2),sw,sh);
   } else if(spriteImg && !spriteImg._failed){
     spriteImg.onload=()=>renderSpriteCanvas(cv,d,idx);
-    g.fillStyle=d.color+'55'; g.font='bold 22px monospace'; g.textAlign='center'; g.textBaseline='middle';
-    g.fillText({'WIZARD':'⚗','MERCHANT':'⚖','FIGHTER':'⚔','BARD':'♪','ROGUE':'🗡'}[d.cls]||'?',cw/2,ch/2);
   }
 }
 
@@ -859,8 +855,14 @@ function renderPortraitCanvas(cv,d,idx,lvl){
   } else if(d.portraits && domainPortraitImgs[idx]){
     const img=domainPortraitImgs[idx][Math.min(lvl,3)];
     const g=cv.getContext('2d'); g.clearRect(0,0,cv.width,cv.height);
-    if(img.complete&&img.naturalWidth) g.drawImage(img,0,0,cv.width,cv.height);
-    else { img.onload=()=>{ g.drawImage(img,0,0,cv.width,cv.height); }; drawPortraitPlaceholder(cv,d,lvl); }
+    const drawContain=(im)=>{
+      const scale=Math.min(cv.width/im.naturalWidth,cv.height/im.naturalHeight);
+      const sw=im.naturalWidth*scale,sh=im.naturalHeight*scale;
+      g.clearRect(0,0,cv.width,cv.height);
+      g.drawImage(im,(cv.width-sw)/2,(cv.height-sh)/2,sw,sh);
+    };
+    if(img.complete&&img.naturalWidth) drawContain(img);
+    else { img.onload=()=>drawContain(img); drawPortraitPlaceholder(cv,d,lvl); }
   } else {
     drawPortraitPlaceholder(cv,d,lvl);
   }
@@ -924,7 +926,7 @@ function updatePortraits(){
       const deeds=(EXPEDITION.deeds||[])[i]||0;
       const lv=deedsLevel(deeds);
       const wkLeagues=domainWeekLeagues(i);
-      prog.textContent='LV '+lv+' · '+deeds+' DEEDS · '+wkLeagues+' LEAGUES THIS WK';
+      prog.textContent='LV '+lv+(lv>0?' '+'★'.repeat(Math.min(lv,5)):'')+' · '+deeds+' DEEDS · '+wkLeagues+' LG/WK';
       // Permanent level marker: one gold star per level, capped at 5
       const nm=document.querySelector('#pc'+i+' .portName');
       if(nm) nm.textContent=d.cls+(lv>0?' '+'★'.repeat(Math.min(lv,5)):'');
