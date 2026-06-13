@@ -2812,40 +2812,56 @@ function drawTownPlaceholder(ctx, x, y, w, h, label, color){
 function drawTownFrame(time){
   const W = tc.width, H = tc.height;
   tx.imageSmoothingEnabled = false;
+  const HORIZON = H * 0.34; // grassy field fills the lower ~2/3 for a cohesive "field" feel
 
-  // Sky
-  const sky = tx.createLinearGradient(0, 0, 0, H * 0.55);
+  // Cover-fit an image into a dest rect, centered, cropping overflow.
+  // anchorBottom keeps the base of the art (e.g. town silhouette) at dy+dh.
+  const drawCover = (img, dx, dy, dw, dh, anchorBottom) => {
+    const scale = Math.max(dw / img.naturalWidth, dh / img.naturalHeight);
+    const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+    const ox = dx + (dw - sw) / 2;
+    const oy = anchorBottom ? (dy + dh - sh) : (dy + (dh - sh) / 2);
+    tx.save();
+    tx.beginPath(); tx.rect(dx, dy, dw, dh); tx.clip();
+    tx.drawImage(img, ox, oy, sw, sh);
+    tx.restore();
+  };
+
+  // Fallback sky gradient (drawn first; image covers it once loaded)
+  const sky = tx.createLinearGradient(0, 0, 0, HORIZON);
   sky.addColorStop(0, '#070616');
   sky.addColorStop(1, '#1a1438');
   tx.fillStyle = sky;
-  tx.fillRect(0, 0, W, H * 0.55);
+  tx.fillRect(0, 0, W, HORIZON);
 
-  // Ground
-  const grd = tx.createLinearGradient(0, H * 0.55, 0, H);
-  grd.addColorStop(0, '#1d1830');
-  grd.addColorStop(1, '#0c0a18');
+  // Fallback ground gradient
+  const grd = tx.createLinearGradient(0, HORIZON, 0, H);
+  grd.addColorStop(0, '#1e4614');
+  grd.addColorStop(1, '#0c1a0a');
   tx.fillStyle = grd;
-  tx.fillRect(0, H * 0.55, W, H * 0.45);
+  tx.fillRect(0, HORIZON, W, H - HORIZON);
 
-  // Sky image or stars
-  const skyImg = townImg('sky.png', drawTown);
+  // Time-of-day sky backdrop: day 7-17, dusk 17-20, night otherwise
+  const hr = new Date().getHours();
+  const skyName = (hr >= 7 && hr < 17) ? 'day.png' : (hr >= 17 && hr < 20) ? 'dusk.png' : 'night.png';
+  const skyImg = townImg(skyName, drawTown);
   if(skyImg.complete && !skyImg._failed && skyImg.naturalWidth > 0){
-    tx.drawImage(skyImg, 0, 0, W, H * 0.55);
-  } else {
-    // stars
+    drawCover(skyImg, 0, 0, W, HORIZON, true); // anchor town silhouette to horizon
+  } else if(skyName === 'night.png') {
+    // stars fallback only at night
     for(let i=0;i<40;i++){
       const h2=hashStr('star'+i);
-      const sx=(h2%997)/997*W, sy=((h2>>10)%797)/797*H*0.45;
+      const sx=(h2%997)/997*W, sy=((h2>>10)%797)/797*HORIZON;
       tx.globalAlpha=Math.min(1,0.2+((h2>>20)%10)/14+(Math.sin((time||0)/700+i)+1)/8);
       tx.fillStyle='#fff'; tx.fillRect(sx,sy,2,2);
     }
     tx.globalAlpha=1;
   }
 
-  // Ground image
+  // Ground image — grassy field
   const groundImg = townImg('ground.png', drawTown);
   if(groundImg.complete && !groundImg._failed && groundImg.naturalWidth > 0){
-    tx.drawImage(groundImg, 0, H * 0.55, W, H * 0.45);
+    drawCover(groundImg, 0, HORIZON, W, H - HORIZON, false);
   }
 
   // Castle
