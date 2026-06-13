@@ -53,8 +53,10 @@
   @keyframes cardflash{0%,50%{border-color:var(--gold);box-shadow:0 0 14px rgba(255,215,0,.8);}25%,75%{border-color:#2a2050;box-shadow:none;}}
   .portChip{margin-top:3px;}
   .portDest{font-size:8px;color:#6a5a90;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
+  .portSprite{display:none;}
   body[data-tab=PARTY] .portDest{text-align:left;font-size:9px;}
   body[data-tab=PARTY] .port-prog{font-size:9px;color:#8a7ab0;text-align:left;padding:0;}
+  body[data-tab=PARTY] .portSprite{display:block;}
 
   /* Stats — slim bar, tap to expand */
   #statsPanel{top:10px;right:10px;max-width:calc(100% - 20px);padding:0;display:flex;flex-direction:column;}
@@ -773,10 +775,10 @@ function buildPortraitCol(){
     card.onclick=(e)=>{ if(!e.target.closest('.party-habits-btn,.party-preset-panel')) openFocus(i); };
     // Portrait row: large portrait left, small sprite right, info
     const portRow=document.createElement('div'); portRow.className='portRow';
-    const cv=document.createElement('canvas'); cv.className='portCanvas portPortrait'; cv.id='portImg'+i; cv.width=80; cv.height=80;
+    const cv=document.createElement('canvas'); cv.className='portCanvas portPortrait'; cv.id='portImg'+i; cv.width=96; cv.height=96;
     renderPortraitCanvas(cv,d,i,0);
     portRow.appendChild(cv);
-    const spriteCv=document.createElement('canvas'); spriteCv.className='portCanvas portSprite'; spriteCv.id='portSprite'+i; spriteCv.width=80; spriteCv.height=80;
+    const spriteCv=document.createElement('canvas'); spriteCv.className='portCanvas portSprite'; spriteCv.id='portSprite'+i; spriteCv.width=52; spriteCv.height=52;
     renderSpriteCanvas(spriteCv,d,i);
     portRow.appendChild(spriteCv);
     const portInfo=document.createElement('div'); portInfo.className='portInfo';
