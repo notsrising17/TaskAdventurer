@@ -363,8 +363,9 @@
     body[data-tab=PARTY] #portraitCol{position:fixed;top:54px;left:0;right:0;bottom:52px;
       overflow-y:auto;padding:10px;gap:8px;background:#0a0818;}
     body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:6px;padding:12px;align-items:stretch;}
-    body[data-tab=PARTY] .portRow{display:flex;align-items:center;gap:14px;}
-    body[data-tab=PARTY] .portCanvas{width:96px;height:96px;flex:0 0 96px;}
+    body[data-tab=PARTY] .portRow{display:flex;align-items:center;gap:10px;}
+    body[data-tab=PARTY] .portSprite{width:88px;height:88px;flex:0 0 88px;}
+    body[data-tab=PARTY] .portPortrait{width:64px;height:64px;flex:0 0 64px;}
     body[data-tab=PARTY] .portName{text-align:left;margin-top:0;font-size:11px;}
     body[data-tab=PARTY] .portChip{display:none;}
     #statsPanel{width:100%;right:0;left:0;top:0;border-left:none;border-right:none;border-top:none;}
@@ -770,9 +771,12 @@ function buildPortraitCol(){
   DOMAINS.forEach((d,i)=>{
     const card=document.createElement('div'); card.className='portCard'; card.id='pc'+i; card.title=d.cls+' — '+d.dest;
     card.onclick=(e)=>{ if(!e.target.closest('.party-habits-btn,.party-preset-panel')) openFocus(i); };
-    // Portrait row: canvas + name+chip stacked
+    // Portrait row: sprite canvas + portrait canvas + name/info
     const portRow=document.createElement('div'); portRow.className='portRow';
-    const cv=document.createElement('canvas'); cv.className='portCanvas'; cv.id='portImg'+i; cv.width=80; cv.height=80;
+    const spriteCv=document.createElement('canvas'); spriteCv.className='portCanvas portSprite'; spriteCv.id='portSprite'+i; spriteCv.width=80; spriteCv.height=80;
+    renderSpriteCanvas(spriteCv,d,i);
+    portRow.appendChild(spriteCv);
+    const cv=document.createElement('canvas'); cv.className='portCanvas portPortrait'; cv.id='portImg'+i; cv.width=80; cv.height=80;
     renderPortraitCanvas(cv,d,i,0);
     portRow.appendChild(cv);
     const portInfo=document.createElement('div'); portInfo.className='portInfo';
@@ -829,28 +833,25 @@ function togglePartyHabits(di, panel){
   });
 }
 
-function renderPortraitCanvas(cv,d,idx,lvl){
-  // Prefer full-body sprite; fall back to portrait sheet, individual portraits, placeholder
-  const spriteImg = domainSpriteImgs[idx];
-  if(spriteImg && (spriteImg.complete ? spriteImg.naturalWidth > 0 : false)){
-    const g=cv.getContext('2d'),cw=cv.width,ch=cv.height;
-    g.clearRect(0,0,cw,ch);
-    // Dark background tinted with domain color
-    const bg=g.createLinearGradient(0,0,0,ch);
-    bg.addColorStop(0,d.dark+'cc'); bg.addColorStop(1,'#0a0818cc');
-    g.fillStyle=bg; g.fillRect(0,0,cw,ch);
-    // Draw sprite centered, pixel-perfect
+function renderSpriteCanvas(cv,d,idx){
+  const g=cv.getContext('2d'),cw=cv.width,ch=cv.height;
+  const spriteImg=domainSpriteImgs[idx];
+  g.clearRect(0,0,cw,ch);
+  const bg=g.createLinearGradient(0,0,0,ch);
+  bg.addColorStop(0,d.dark+'cc'); bg.addColorStop(1,'#0a0818cc');
+  g.fillStyle=bg; g.fillRect(0,0,cw,ch);
+  if(spriteImg && spriteImg.complete && spriteImg.naturalWidth>0){
     const scale=Math.min(cw/spriteImg.naturalWidth,ch/spriteImg.naturalHeight);
     const sw=Math.round(spriteImg.naturalWidth*scale),sh=Math.round(spriteImg.naturalHeight*scale);
     g.drawImage(spriteImg,(cw-sw)/2,(ch-sh)/2,sw,sh);
-    return;
+  } else if(spriteImg && !spriteImg._failed){
+    spriteImg.onload=()=>renderSpriteCanvas(cv,d,idx);
+    g.fillStyle=d.color+'55'; g.font='bold 22px monospace'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText({'WIZARD':'⚗','MERCHANT':'⚖','FIGHTER':'⚔','BARD':'♪','ROGUE':'🗡'}[d.cls]||'?',cw/2,ch/2);
   }
-  // Sprite not loaded yet — wire up onload and show placeholder meanwhile
-  if(spriteImg && !spriteImg._failed){
-    spriteImg.onload=()=>renderPortraitCanvas(cv,d,idx,lvl);
-    drawPortraitPlaceholder(cv,d,lvl);
-    return;
-  }
+}
+
+function renderPortraitCanvas(cv,d,idx,lvl){
   if(d.sheet && sheetImgs[idx]){
     drawSheetPortrait(cv,sheetImgs[idx],lvl);
   } else if(d.portraits && domainPortraitImgs[idx]){
@@ -910,6 +911,7 @@ function updatePortraits(){
   DOMAINS.forEach((d,i)=>{
     const lvl=domainArtLevel(i);
     const cv=document.getElementById('portImg'+i); if(cv) renderPortraitCanvas(cv,d,i,lvl);
+    const sc=document.getElementById('portSprite'+i); if(sc) renderSpriteCanvas(sc,d,i);
     const cw=document.getElementById('portChip'+i);
     if(cw){ cw.innerHTML=''; cw.appendChild(statusChip(i)); }
     // Active state if focus open
