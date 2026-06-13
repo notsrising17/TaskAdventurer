@@ -66,9 +66,10 @@
   .tasks-stat{font-size:9px;color:var(--text);display:flex;align-items:center;gap:4px;}
 
   /* Form — slides up from bottom of list panel */
-  #formToggle{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;
-    border-left:3px solid #a88a00;padding:10px 14px;cursor:pointer;letter-spacing:2px;min-height:44px;
-    box-shadow:0 0 10px rgba(255,215,0,.25);white-space:nowrap;}
+  #formToggle{font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:var(--gold);
+    border:1px solid #4a3a8a;padding:10px 14px;cursor:pointer;letter-spacing:2px;min-height:44px;
+    white-space:nowrap;transition:border-color .15s;}
+  #formToggle:hover,#formToggle.up{border-color:var(--gold);}
   #formPanel{left:0;right:0;bottom:0;width:100%;
     padding:8px;display:none;gap:6px;align-items:stretch;flex-wrap:wrap;
     background:rgba(8,6,20,0.97);border-top:2px solid #4a3a8a;}
@@ -236,6 +237,7 @@
   #captureInput:focus{border-color:var(--gold);}
   #captureBar{flex:0 0 auto;display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid #2a2050;background:rgba(8,6,20,.97);}
   #captureStow{font-family:inherit;font-size:9px;background:var(--gold);color:#1a1400;border:none;border-bottom:3px solid #a88a00;padding:10px 12px;min-height:44px;cursor:pointer;letter-spacing:1px;white-space:nowrap;flex:0 0 auto;}
+  #captureHint{flex:0 0 auto;font-size:8px;color:#8a7ab0;letter-spacing:.5px;line-height:1.6;padding:5px 10px 7px;background:rgba(8,6,20,.97);border-bottom:1px solid #1a1438;}
   /* Tavern — uncategorized storage, deliberately muted */
   .tavernGroup{opacity:.85;border-style:dashed!important;}
   .tavernGroup .task{border-left-color:#4a4060;background:rgba(10,9,24,.7);}
@@ -435,14 +437,15 @@
 <div id="listPanel" class="hud">
   <div id="listHead">
     <span class="lbl">QUEST LOG</span>
-    <button id="formToggle" onclick="toggleForm()">＋ ADD WITH DETAILS</button>
+    <button id="formToggle" onclick="toggleForm()">⚙ ADD WITH DETAILS</button>
     <button id="collapseBtn">▼ HIDE</button>
   </div>
   <div id="captureBar">
-    <input type="text" id="captureInput" maxlength="60" placeholder="NEW QUEST..." enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text">
-    <button id="captureStow" onclick="captureBarSubmit()">STOW</button>
-    <button id="dumpBtn" onclick="openDump()" style="font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:#9a8ad0;border:1px solid #3a3060;padding:10px;min-height:44px;cursor:pointer;white-space:nowrap;" title="Brain dump">⋮⋮</button>
+    <input type="text" id="captureInput" maxlength="60" placeholder="TYPE A NEW QUEST HERE..." enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text">
+    <button id="captureStow" onclick="captureBarSubmit()">＋ ADD</button>
+    <button id="dumpBtn" onclick="openDump()" style="font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:#9a8ad0;border:1px solid #3a3060;padding:10px;min-height:44px;cursor:pointer;white-space:nowrap;" title="Add many quests at once" aria-label="Add many at once">＋ MANY</button>
   </div>
+  <div id="captureHint">QUICK-ADDS WAIT IN THE 🍺 TAVERN — SORT THEM INTO A CLASS ANYTIME. USE ⚙ ADD WITH DETAILS TO PICK A CLASS &amp; SET GOALS.</div>
   <div id="formPanel">
     <div class="fgroup" id="fgName"><label class="flabel" for="taskName">TASK</label>
       <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60" enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text"></div>
@@ -3379,7 +3382,7 @@ document.getElementById('collapseBtn').onclick=()=>{
 function toggleForm(){
   const fp=document.getElementById('formPanel'),btn=document.getElementById('formToggle');
   const open=fp.classList.toggle('open');
-  btn.textContent=open?'✕ CANCEL':'＋ ADD WITH DETAILS';
+  btn.textContent=open?'✕ CANCEL':'⚙ ADD WITH DETAILS';
   btn.classList.toggle('up',open);
   if(open) document.getElementById('taskName').focus();
 }
