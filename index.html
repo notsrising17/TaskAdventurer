@@ -37,8 +37,9 @@
     box-shadow:0 0 16px rgba(0,0,0,.7),inset 0 0 14px rgba(0,0,0,.5);backdrop-filter:blur(2px);}
 
   /* Status chips — the per-domain BESIEGED/BEHIND/IDLE/MARCHING signal */
-  .status-chip{font-size:9px;padding:4px 6px;border:1px solid;letter-spacing:1px;white-space:nowrap;
-    background:rgba(0,0,0,.35);flex:0 0 auto;}
+  .status-chip{font-size:7px;padding:1px 5px;border:1px solid;letter-spacing:1px;white-space:nowrap;
+    background:none;flex:0 0 auto;opacity:0.6;}
+  .status-chip.urgent{opacity:0.9;}
 
   /* Portrait roster (PARTY view on mobile, left rail on desktop) */
   #portraitCol{position:fixed;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:5;}
@@ -103,7 +104,7 @@
   #listHead{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 10px;border-bottom:1px solid #2a2050;gap:6px;}
   #listHead .lbl{font-size:9px;color:var(--gold);letter-spacing:1px;}
   #collapseBtn{font-family:inherit;font-size:8px;background:none;border:1px solid #4a3a8a;color:var(--gold);padding:0 8px;height:36px;cursor:pointer;line-height:1;white-space:nowrap;}
-  #listBody{overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:6px;}
+  #listBody{overflow-y:auto;padding:6px 8px 72px;display:flex;flex-direction:column;gap:6px;}
   #listPanel.collapsed #listBody{display:none;}
   #listPanel.collapsed{max-height:none;}
   .empty{font-size:9px;color:#6a5aa0;text-align:center;padding:14px;line-height:1.8;}
@@ -453,7 +454,7 @@
     <button id="captureStow" onclick="captureBarSubmit()">＋ ADD</button>
     <button id="dumpBtn" onclick="openDump()" style="font-family:inherit;font-size:9px;background:rgba(255,215,0,.08);color:#9a8ad0;border:1px solid #3a3060;padding:10px;min-height:44px;cursor:pointer;white-space:nowrap;" title="Add many quests at once" aria-label="Add many at once">＋ MANY</button>
   </div>
-  <div id="captureHint">QUICK-ADDS WAIT IN THE 🍺 TAVERN — SORT THEM INTO A CLASS ANYTIME. USE ⚙ ADD WITH DETAILS TO PICK A CLASS &amp; SET GOALS.</div>
+  <div id="captureHint">TYPE TO CAPTURE · SORT INTO A CLASS ANYTIME</div>
   <div id="formPanel">
     <div class="fgroup" id="fgName"><label class="flabel" for="taskName">TASK</label>
       <input type="text" id="taskName" placeholder="TASK NAME..." maxlength="60" enterkeyhint="done" autocapitalize="sentences" autocorrect="on" autocomplete="off" inputmode="text"></div>
@@ -1486,6 +1487,7 @@ function statusChip(idx){
   const st=domainStatus(idx);
   const chip=document.createElement('span'); chip.className='status-chip';
   chip.textContent=st; chip.style.color=STATUS_INFO[st].color; chip.style.borderColor=STATUS_INFO[st].color;
+  if(STATUS_INFO[st].level>0) chip.classList.add('urgent');
   return chip;
 }
 
@@ -1946,9 +1948,8 @@ function buildTodayStrip(){
   const cands=todayStripIds().map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
   lastStripIds=cands.map(t=>t.id);
   if(!cands.length){
-    const ok=document.createElement('div'); ok.className='empty';
-    ok.textContent='ALL CLEAR — THE PARTY RESTS';
-    grp.appendChild(ok);
+    // Nothing pinned today — hide the whole strip so it doesn't take up space
+    grp.style.display='none';
     return grp;
   }
   cands.forEach(t=>{
@@ -2007,7 +2008,7 @@ function renderList(){
     // 2. Sub-line: leagues this domain contributed to the expedition this week
     const sub=document.createElement('div'); sub.className='dgSub';
     const dl=domainWeekLeagues(di);
-    sub.textContent=dl>0?('🥾 '+dl+' LEAGUE'+(dl===1?'':'S')+' THIS WEEK'):'NO LEAGUES YET THIS WEEK';
+    sub.textContent=dl>0?('🥾 '+dl+' LEAGUE'+(dl===1?'':'S')+' THIS WEEK'):'';
     sub.style.cursor='pointer'; sub.onclick=()=>openFocus(di);
     a11y(sub,'Open '+d.cls+' details');
     grp.appendChild(sub);
