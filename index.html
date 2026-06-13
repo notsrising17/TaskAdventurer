@@ -2877,7 +2877,12 @@ function drawTownFrame(time){
   const castleImgName = 'castle_' + (tier+1) + '.png';
   const castleImg = townImg(castleImgName, drawTown);
   if(castleImg.complete && !castleImg._failed && castleImg.naturalWidth > 0){
-    tx.drawImage(castleImg, cx, cy, cw, ch);
+    // Aspect-preserve so the keep isn't stretched skinny; fit to its box and
+    // bottom-anchor it on the grounds like the surrounding structures.
+    const baseY = cy + ch;
+    const cs = Math.min(cw / castleImg.naturalWidth, ch / castleImg.naturalHeight);
+    const dw = castleImg.naturalWidth * cs, dh = castleImg.naturalHeight * cs;
+    tx.drawImage(castleImg, Math.round(cx + cw/2 - dw/2), Math.round(baseY - dh), Math.round(dw), Math.round(dh));
   } else {
     drawTownPlaceholder(tx, cx, cy, cw, ch, castleInfo.name, '#2a1a48');
     tx.fillStyle = '#3a2a5a';
@@ -2891,23 +2896,35 @@ function drawTownFrame(time){
     tx.fillText(castleInfo.name, cx+cw/2, cy+ch/2);
   }
 
-  // Plots
+  // Plots — drawn back-to-front so nearer buildings overlap farther ones,
+  // each grounded on the field (aspect preserved, bottom-anchored, soft
+  // shadow) so the town reads as one cohesive settlement, not scattered tiles.
   TOWN_LAYOUT.plots.forEach((pl, i) => {
     const px = Math.round(pl.x * W - pl.w * W / 2);
     const py = Math.round(pl.y * H - pl.h * H / 2);
     const pw = Math.round(pl.w * W);
     const ph = Math.round(pl.h * H);
     const built = (town.plots||{})[i];
-    if(built){
-      const struct = STRUCTURES.find(s=>s.key===built.key);
-      const sImg = townImg(built.key + '.png', drawTown);
-      if(sImg.complete && !sImg._failed && sImg.naturalWidth > 0){
-        tx.drawImage(sImg, px, py, pw, ph);
-      } else {
-        drawTownPlaceholder(tx, px, py, pw, ph, struct?struct.name:built.key, '#1a2a3a');
-      }
+    if(!built) return; // empty plot — field shows through; click still builds
+    const struct = STRUCTURES.find(s=>s.key===built.key);
+    const sImg = townImg(built.key + '.png', drawTown);
+    const baseX = px + pw/2;          // ground contact centred on the plot
+    const baseY = py + ph;            // structures stand on the plot's base line
+    // Soft contact shadow so the building sits on the grass, not floats
+    tx.save();
+    tx.fillStyle = 'rgba(0,0,0,0.28)';
+    tx.beginPath();
+    tx.ellipse(baseX, baseY, pw*0.42, ph*0.16, 0, 0, Math.PI*2);
+    tx.fill();
+    tx.restore();
+    if(sImg.complete && !sImg._failed && sImg.naturalWidth > 0){
+      // Aspect-preserve, give the building presence (wider than the bare plot),
+      // and rise upward from the base line.
+      const dw = pw * 1.4;
+      const dh = sImg.naturalHeight * (dw / sImg.naturalWidth);
+      tx.drawImage(sImg, Math.round(baseX - dw/2), Math.round(baseY - dh), Math.round(dw), Math.round(dh));
     } else {
-      // Empty plot — invisible, field shows through; click area still active
+      drawTownPlaceholder(tx, px, py, pw, ph, struct?struct.name:built.key, '#1a2a3a');
     }
   });
 
