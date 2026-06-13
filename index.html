@@ -206,7 +206,7 @@
   .habit-top{display:flex;align-items:center;gap:5px;}
   .habit-week{display:flex;align-items:center;gap:3px;padding:0 6px 4px;}
   .habit-dots{display:flex;gap:4px;flex:1;}
-  .hdot{width:14px;height:14px;border-radius:2px;border:1px solid #3a3060;background:#0d0b22;cursor:pointer;transition:background .15s;}
+  .hdot{width:14px;height:14px;border-radius:2px;border:1px solid #3a3060;background:#0d0b22;cursor:default;transition:background .15s;}
   .hdot.done{background:var(--hdot-col,#44cc44);border-color:var(--hdot-col,#44cc44);}
   .hdot.today{box-shadow:0 0 0 2px rgba(255,255,255,.4);}
   .habit-progress{height:4px;background:#070710;border:1px solid #2a2050;flex:1;margin-left:4px;}
@@ -2000,21 +2000,22 @@ function buildHabitRow(task,dom){
   div.dataset.id=task.id;
   div.style.flexDirection='column'; div.style.gap='0'; div.style.padding='6px 8px 4px';
 
-  // Top row: logger + name + meta + edit + delete
+  // Top row: unified cb + name + meta + edit + delete
   const top=document.createElement('div'); top.className='habit-top';
-  if(capped){
+  {
     const cb=document.createElement('div');
-    cb.className='cb'+(doneToday?' checked':'');
-    cb.title=doneToday?'Un-check today':'Done today';
-    cb.onclick=()=>toggleTask(task.id);
-    a11y(cb,'Toggle today: '+task.name);
+    if(capped){
+      cb.className='cb'+(doneToday?' checked':'');
+      cb.title=doneToday?'Un-log today':'Log today';
+      cb.onclick=()=>toggleTask(task.id);
+      a11y(cb,(doneToday?'Un-log today: ':'Log today: ')+task.name);
+    } else {
+      cb.className='cb'; cb.textContent='+';
+      cb.title='Log one completion';
+      cb.onclick=()=>toggleTask(task.id);
+      a11y(cb,'Log completion: '+task.name);
+    }
     top.appendChild(cb);
-  } else {
-    const plus=document.createElement('div'); plus.className='cb'; plus.textContent='+';
-    plus.title='Log one completion';
-    plus.onclick=()=>toggleTask(task.id);
-    a11y(plus,'Log completion: '+task.name);
-    top.appendChild(plus);
   }
   const nm=document.createElement('div'); nm.className='tname'; nm.textContent=task.name;
   attachLongPress(nm,task.id);
@@ -2042,9 +2043,7 @@ function buildHabitRow(task,dom){
     const dot=document.createElement('div');
     dot.className='hdot'+(k<wc?' done':'')+(capped&&k===wc-1&&doneToday?' today':'');
     dot.style.setProperty('--hdot-col',col);
-    if(capped&&k===wc&&!doneToday){ dot.title='Log today'; dot.onclick=()=>toggleTask(task.id); a11y(dot,'Log today: '+task.name); }
-    else if(capped&&k===wc-1&&doneToday){ dot.title='Un-log today'; dot.onclick=()=>toggleTask(task.id); a11y(dot,'Un-log today: '+task.name); }
-    else dot.style.cursor='default';
+    dot.style.cursor='default';
     dots.appendChild(dot);
   }
   // Mini progress bar showing wc/goal
@@ -3427,7 +3426,7 @@ function renderFocusPanel(){
     if(task.type===T_HABIT){
       const row=buildHabitRow(task,d);
       // rewire callbacks to also refresh focus panel
-      row.querySelectorAll('.cb,.del,.hdot').forEach(el=>{ const orig=el.onclick; if(orig) el.onclick=()=>{ orig(); renderFocusPanel(); }; });
+      row.querySelectorAll('.cb,.del').forEach(el=>{ const orig=el.onclick; if(orig) el.onclick=()=>{ orig(); renderFocusPanel(); }; });
       body.appendChild(row); return;
     }
     body.appendChild(buildQuestRow(task,renderFocusPanel));
@@ -3473,7 +3472,7 @@ function renderCheckin(){
     const sect=document.createElement('div'); sect.className='ck-sect'; sect.style.color=d.color; sect.textContent=d.cls+' — '+d.name; list.appendChild(sect);
     tasks.forEach(task=>{
       const row=buildHabitRow(task,d);
-      row.querySelectorAll('.cb,.hdot,.del').forEach(el=>{ const orig=el.onclick; if(orig) el.onclick=()=>{ orig(); renderCheckin(); }; });
+      row.querySelectorAll('.cb,.del').forEach(el=>{ const orig=el.onclick; if(orig) el.onclick=()=>{ orig(); renderCheckin(); }; });
       list.appendChild(row);
     });
   });
