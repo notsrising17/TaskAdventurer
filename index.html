@@ -117,7 +117,7 @@
   .todayStrip{border-color:var(--gold);background:rgba(255,215,0,.05);}
   .tokenOffer{border-color:#8a6a20;background:rgba(255,204,0,.05);}
   @keyframes taskpop{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
-  .task{display:flex;align-items:center;gap:5px;min-height:44px;background:rgba(12,10,32,0.85);border:1px solid #2a2050;border-left-width:3px;padding:4px 6px;font-size:9px;transition:opacity .4s;overflow:hidden;touch-action:pan-y;}
+  .task{display:flex;align-items:center;gap:4px;min-height:40px;background:rgba(12,10,32,0.85);border:1px solid #2a2050;border-left-width:3px;padding:4px 6px;font-size:9px;transition:opacity .4s;overflow:hidden;touch-action:pan-y;}
   .task.popped{animation:taskpop .25s ease-out;}
   .task.overdue{border-color:var(--bad)!important;box-shadow:0 0 6px rgba(238,34,34,.4);}
   .task.done{opacity:.4;}.task.done .tname{text-decoration:line-through;}
@@ -198,7 +198,7 @@
   .cb.checked{background:var(--ok);border-color:var(--ok);}
   .cb.checked::after{content:"";position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid #062;border-width:0 2px 2px 0;transform:rotate(45deg);animation:pop .25s;}
   @keyframes pop{0%{transform:rotate(45deg) scale(0);}100%{transform:rotate(45deg) scale(1);}}
-  .tname{flex:1;min-width:0;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tname{flex:1;min-width:0;line-height:1.5;word-break:break-word;overflow-wrap:anywhere;}
   .tmeta{display:flex;flex-direction:column;gap:2px;align-items:flex-end;flex:0 0 auto;}
   .tloc{font-size:9px;white-space:nowrap;}
   .ttype{font-size:9px;color:#88ccff;white-space:nowrap;}
@@ -377,12 +377,13 @@
     .fgroup{flex:1 1 100%;}
     #fgGoal,#fgDate,#fgRepeat{flex:1 1 auto;}
     #addBtn{flex:1 1 100%;height:48px;font-size:10px;padding:0;}
-    .task{min-height:48px;padding:6px 8px;}
-    .del{padding:12px;min-width:44px;min-height:44px;font-size:10px;}
-    .edit-btn{padding:12px;min-width:44px;min-height:44px;font-size:10px;}
-    .hdot{width:18px;height:18px;}
-    .cb{width:32px;height:32px;flex:0 0 32px;}
-    .cb.checked::after{left:8px;top:3px;width:7px;height:13px;}
+    .task{min-height:40px;padding:5px 6px;}
+    .del{padding:3px 8px;min-width:0;min-height:0;font-size:8px;letter-spacing:0;}
+    .edit-btn{display:none;}
+    .tmeta{display:none;}
+    .hdot{width:14px;height:14px;}
+    .cb{width:28px;height:28px;flex:0 0 28px;}
+    .cb.checked::after{left:7px;top:2px;width:6px;height:12px;}
     #qcFab{bottom:64px;}
     body[data-tab=TOWN] #qcFab{display:none;}
   }
