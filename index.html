@@ -52,6 +52,9 @@
   .portCard.flash{animation:cardflash .6s steps(2);}
   @keyframes cardflash{0%,50%{border-color:var(--gold);box-shadow:0 0 14px rgba(255,215,0,.8);}25%,75%{border-color:#2a2050;box-shadow:none;}}
   .portChip{margin-top:3px;}
+  .portDest{font-size:8px;color:#6a5a90;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
+  body[data-tab=PARTY] .portDest{text-align:left;font-size:9px;}
+  body[data-tab=PARTY] .port-prog{font-size:9px;color:#8a7ab0;text-align:left;padding:0;}
 
   /* Stats — slim bar, tap to expand */
   #statsPanel{top:10px;right:10px;max-width:calc(100% - 20px);padding:0;display:flex;flex-direction:column;}
@@ -359,10 +362,11 @@
     body[data-tab=PARTY] #listPanel{display:none;}
     body[data-tab=PARTY] #portraitCol{position:fixed;top:54px;left:0;right:0;bottom:52px;
       overflow-y:auto;padding:10px;gap:8px;background:#0a0818;}
-    body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:4px;padding:10px;align-items:stretch;}
-    body[data-tab=PARTY] .portRow{display:flex;align-items:center;gap:10px;}
-    body[data-tab=PARTY] .portCanvas{width:56px;height:56px;flex:0 0 56px;}
-    body[data-tab=PARTY] .portName{text-align:left;margin-top:0;}
+    body[data-tab=PARTY] .portCard{width:100%;flex-direction:column;gap:6px;padding:12px;align-items:stretch;}
+    body[data-tab=PARTY] .portRow{display:flex;align-items:center;gap:14px;}
+    body[data-tab=PARTY] .portCanvas{width:96px;height:96px;flex:0 0 96px;}
+    body[data-tab=PARTY] .portName{text-align:left;margin-top:0;font-size:11px;}
+    body[data-tab=PARTY] .portChip{display:none;}
     #statsPanel{width:100%;right:0;left:0;top:0;border-left:none;border-right:none;border-top:none;}
     .stat-name{font-size:9px;}
     #formPanel{bottom:52px;}
@@ -773,6 +777,7 @@ function buildPortraitCol(){
     portRow.appendChild(cv);
     const portInfo=document.createElement('div'); portInfo.className='portInfo';
     const nm=document.createElement('div'); nm.className='portName'; nm.style.color=d.color; nm.textContent=d.cls; portInfo.appendChild(nm);
+    const dest=document.createElement('div'); dest.className='portDest'; dest.textContent=d.name+' · '+d.dest; portInfo.appendChild(dest);
     const chipWrap=document.createElement('div'); chipWrap.className='portChip'; chipWrap.id='portChip'+i; portInfo.appendChild(chipWrap);
     portRow.appendChild(portInfo);
     card.appendChild(portRow);
@@ -825,6 +830,27 @@ function togglePartyHabits(di, panel){
 }
 
 function renderPortraitCanvas(cv,d,idx,lvl){
+  // Prefer full-body sprite; fall back to portrait sheet, individual portraits, placeholder
+  const spriteImg = domainSpriteImgs[idx];
+  if(spriteImg && (spriteImg.complete ? spriteImg.naturalWidth > 0 : false)){
+    const g=cv.getContext('2d'),cw=cv.width,ch=cv.height;
+    g.clearRect(0,0,cw,ch);
+    // Dark background tinted with domain color
+    const bg=g.createLinearGradient(0,0,0,ch);
+    bg.addColorStop(0,d.dark+'cc'); bg.addColorStop(1,'#0a0818cc');
+    g.fillStyle=bg; g.fillRect(0,0,cw,ch);
+    // Draw sprite centered, pixel-perfect
+    const scale=Math.min(cw/spriteImg.naturalWidth,ch/spriteImg.naturalHeight);
+    const sw=Math.round(spriteImg.naturalWidth*scale),sh=Math.round(spriteImg.naturalHeight*scale);
+    g.drawImage(spriteImg,(cw-sw)/2,(ch-sh)/2,sw,sh);
+    return;
+  }
+  // Sprite not loaded yet — wire up onload and show placeholder meanwhile
+  if(spriteImg && !spriteImg._failed){
+    spriteImg.onload=()=>renderPortraitCanvas(cv,d,idx,lvl);
+    drawPortraitPlaceholder(cv,d,lvl);
+    return;
+  }
   if(d.sheet && sheetImgs[idx]){
     drawSheetPortrait(cv,sheetImgs[idx],lvl);
   } else if(d.portraits && domainPortraitImgs[idx]){
