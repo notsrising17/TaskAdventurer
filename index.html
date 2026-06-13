@@ -2876,20 +2876,31 @@ function drawTownFrame(time){
   const tier = (town.castleTier || 1) - 1;
   const castleInfo = CASTLE_TIERS[tier] || CASTLE_TIERS[0];
   const cl = TOWN_LAYOUT.castle;
-  const cx = Math.round(cl.x * W - cl.w * W / 2);
-  const cy = Math.round(cl.y * H - cl.h * H / 2);
-  const cw = Math.round(cl.w * W);
-  const ch = Math.round(cl.h * H);
+  // Higher tiers grow more imposing — the keep should visibly level up.
+  const tierGrow = [0.82, 1.0, 1.18, 1.4][tier] || 1;
+  const cw = Math.round(cl.w * W * tierGrow);
+  const ch = Math.round(cl.h * H * tierGrow);
+  const cx = Math.round(cl.x * W - cw / 2);
+  const cy = Math.round(cl.y * H - ch / 2);
 
   const castleImgName = 'castle_' + (tier+1) + '.png';
   const castleImg = townImg(castleImgName, drawTown);
   if(castleImg.complete && !castleImg._failed && castleImg.naturalWidth > 0){
-    // Aspect-preserve so the keep isn't stretched skinny; fit to its box and
-    // bottom-anchor it on the grounds like the surrounding structures.
+    // Anchor on the grounds; favour filling the width so the keep has presence,
+    // but cap height so a tall keep doesn't poke into the sky.
     const baseY = cy + ch;
-    const cs = Math.min(cw / castleImg.naturalWidth, ch / castleImg.naturalHeight);
-    const dw = castleImg.naturalWidth * cs, dh = castleImg.naturalHeight * cs;
-    tx.drawImage(castleImg, Math.round(cx + cw/2 - dw/2), Math.round(baseY - dh), Math.round(dw), Math.round(dh));
+    const maxDh = H * 0.50;
+    let dw = cw;
+    let dh = castleImg.naturalHeight * (dw / castleImg.naturalWidth);
+    if(dh > maxDh){ dh = maxDh; dw = castleImg.naturalWidth * (dh / castleImg.naturalHeight); }
+    // Soft contact shadow grounds the keep on the field
+    tx.save();
+    tx.fillStyle = 'rgba(0,0,0,0.30)';
+    tx.beginPath();
+    tx.ellipse(cl.x * W, baseY, dw*0.40, ch*0.10, 0, 0, Math.PI*2);
+    tx.fill();
+    tx.restore();
+    tx.drawImage(castleImg, Math.round(cl.x * W - dw/2), Math.round(baseY - dh), Math.round(dw), Math.round(dh));
   } else {
     drawTownPlaceholder(tx, cx, cy, cw, ch, castleInfo.name, '#2a1a48');
     tx.fillStyle = '#3a2a5a';
@@ -3144,8 +3155,11 @@ function townHitTest(e){
   const my2 = (e.clientY - rect.top) * (tc.height / rect.height);
   const W = tc.width, H = tc.height;
   const cl = TOWN_LAYOUT.castle;
-  const cx = cl.x*W - cl.w*W/2, cy = cl.y*H - cl.h*H/2;
-  if(mx2>=cx && mx2<=cx+cl.w*W && my2>=cy && my2<=cy+cl.h*H) return 'castle';
+  const ctier = ((EXPEDITION.town && EXPEDITION.town.castleTier) || 1) - 1;
+  const cGrow = [0.82, 1.0, 1.18, 1.4][ctier] || 1;
+  const ccw = cl.w*W*cGrow, cch = cl.h*H*cGrow;
+  const cx = cl.x*W - ccw/2, cy = cl.y*H - cch/2;
+  if(mx2>=cx && mx2<=cx+ccw && my2>=cy && my2<=cy+cch) return 'castle';
   for(let i=0; i<TOWN_LAYOUT.plots.length; i++){
     const pl = TOWN_LAYOUT.plots[i];
     const px2=pl.x*W-pl.w*W/2, py2=pl.y*H-pl.h*H/2;
