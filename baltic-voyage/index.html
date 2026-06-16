@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Baltic Voyage</title>
+<meta name="description" content="An interactive travel companion for a Helsinki → Tallinn → Riga → Vilnius summer journey.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12454A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Baltic Voyage">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Leaflet (interactive map) — degrades gracefully when offline -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+<style>
+:root{
+  --cream:#F6F1E7; --paper:#FFFDF8; --ink:#22302E; --muted:#6E7B78;
+  --teal:#1E6E73; --teal-d:#12454A; --navy:#0E2A33;
+  --amber:#D99A4E; --amber-d:#B5793A; --terra:#C25B3A;
+  --line:#E7DFCC; --line-2:#EFE9DA;
+  --ok:#3E8E62; --shadow:0 6px 22px rgba(18,69,74,.10), 0 2px 6px rgba(18,69,74,.06);
+  --nav-h:64px; --top-h:54px;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background:var(--cream); color:var(--ink);
+  font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-size:15px; line-height:1.5; overflow:hidden;
+}
+h1,h2,h3,.display{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;letter-spacing:.2px;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+input,select,textarea{font-family:inherit;font-size:15px;}
+a{color:var(--teal);}
+
+/* ---------- App shell ---------- */
+#app{display:flex;flex-direction:column;height:100%;}
+#topbar{
+  height:calc(var(--top-h) + var(--sat)); padding-top:var(--sat);
+  display:flex;align-items:center;gap:10px;padding-left:16px;padding-right:16px;
+  background:linear-gradient(120deg,var(--teal-d),var(--navy));
+  color:var(--cream); flex:none; z-index:20; box-shadow:0 2px 10px rgba(14,42,51,.25);
+}
+#topbar .brand{display:flex;align-items:center;gap:9px;}
+#topbar .star{width:22px;height:22px;flex:none;}
+#topbar .title{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.3px;line-height:1;}
+#countChip{margin-left:auto;font-size:11.5px;font-weight:600;letter-spacing:.3px;
+  background:rgba(246,241,231,.14);border:1px solid rgba(246,241,231,.28);
+  padding:5px 11px;border-radius:999px;white-space:nowrap;}
+#offlineDot{width:8px;height:8px;border-radius:50%;background:var(--amber);display:none;margin-left:8px;}
+body.offline #offlineDot{display:block;}
+
+#view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--nav-h) + var(--sab) + 12px);}
+.section{display:none;animation:fade .35s ease;}
+.section.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+/* ---------- Bottom nav ---------- */
+#nav{
+  position:fixed;left:0;right:0;bottom:0;height:calc(var(--nav-h) + var(--sab));
+  padding-bottom:var(--sab);
+  display:flex;background:var(--paper);border-top:1px solid var(--line);z-index:30;
+  box-shadow:0 -3px 16px rgba(18,69,74,.07);
+}
+#nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--muted);font-size:10.5px;font-weight:600;letter-spacing:.2px;padding-top:6px;transition:color .2s;}
+#nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+#nav button.active{color:var(--teal);}
+#nav button.active svg{stroke:var(--teal);}
+#nav button .ndot{width:5px;height:5px;border-radius:50%;background:var(--amber);position:absolute;top:8px;opacity:0;}
+#nav button.active .ndot{opacity:1;}
+
+/* ---------- Generic layout ---------- */
+.wrap{padding:16px;max-width:680px;margin:0 auto;}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;margin:2px 0 14px;gap:12px;}
+.sec-head h2{font-size:27px;color:var(--teal-d);line-height:1.05;}
+.sec-head .sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--amber-d);}
+
+.btn{display:inline-flex;align-items:center;gap:7px;background:var(--amber);color:#3a2410;
+  font-weight:600;font-size:13.5px;padding:9px 15px;border-radius:11px;box-shadow:var(--shadow);transition:transform .12s,filter .2s;}
+.btn:active{transform:scale(.96);}
+.btn.ghost{background:transparent;color:var(--teal-d);border:1.5px solid var(--line);box-shadow:none;}
+.btn.sm{padding:6px 11px;font-size:12.5px;border-radius:9px;}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;}
+.empty{text-align:center;color:var(--muted);padding:34px 18px;border:1.5px dashed var(--line);border-radius:16px;background:rgba(255,253,248,.6);}
+.empty .em-ico{font-size:30px;display:block;margin-bottom:8px;opacity:.85;}
+.empty p{font-size:13.5px;margin-bottom:14px;}
+
+.divider{height:1px;background:var(--line-2);margin:16px 0;}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;letter-spacing:.3px;
+  padding:3px 9px;border-radius:999px;background:rgba(30,110,115,.10);color:var(--teal-d);}
+.chip.amber{background:rgba(217,154,78,.16);color:var(--amber-d);}
+.chip.terra{background:rgba(194,91,58,.14);color:var(--terra);}
+
+/* ---------- Trip / Home ---------- */
+.hero{position:relative;border-radius:0 0 26px 26px;overflow:hidden;
+  background:linear-gradient(160deg,var(--teal) 0%,var(--teal-d) 55%,var(--navy) 100%);
+  color:var(--cream);padding:24px 20px 64px;box-shadow:var(--shadow);}
+.hero .eyebrow{color:var(--amber);}
+.hero h1{font-size:40px;line-height:.98;margin:6px 0 8px;letter-spacing:.5px;}
+.hero .route{font-size:13.5px;color:rgba(246,241,231,.86);font-weight:500;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.hero .route .arr{color:var(--amber);font-weight:700;}
+.hero .sun{position:absolute;top:18px;right:18px;width:64px;height:64px;border-radius:50%;
+  background:radial-gradient(circle at 38% 38%,#F5D38E,var(--amber));box-shadow:0 0 38px rgba(217,154,78,.55);opacity:.9;}
+.hero .wave{position:absolute;left:0;right:0;bottom:-1px;width:100%;display:block;}
+.countdown{display:flex;gap:10px;margin-top:18px;}
+.cd-box{background:rgba(246,241,231,.13);border:1px solid rgba(246,241,231,.22);border-radius:13px;
+  padding:9px 4px;text-align:center;flex:1;backdrop-filter:blur(2px);}
+.cd-box b{display:block;font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;line-height:1;color:#fff;}
+.cd-box span{font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(246,241,231,.8);}
+
+.minihead{font-size:13px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--amber-d);margin:22px 2px 11px;}
+.citycard{display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:15px;background:var(--paper);
+  border:1px solid var(--line);box-shadow:var(--shadow);margin-bottom:11px;position:relative;overflow:hidden;}
+.citycard .ord{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:700;color:var(--line);width:34px;text-align:center;flex:none;line-height:1;}
+.citycard .ci-main{flex:1;min-width:0;}
+.citycard .ci-name{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:700;color:var(--teal-d);line-height:1;}
+.citycard .ci-sub{font-size:12px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.citycard .flag{font-size:22px;flex:none;}
+.citycard .accent{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--amber);}
+
+.quickrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:13px 10px;text-align:center;box-shadow:var(--shadow);}
+.stat b{display:block;font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:700;color:var(--terra);line-height:1;}
+.stat span{font-size:10.5px;color:var(--muted);letter-spacing:.4px;}
+
+/* ---------- List item cards ---------- */
+.item{background:var(--paper);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);
+  margin-bottom:12px;overflow:hidden;}
+.item .ihead{display:flex;align-items:flex-start;gap:11px;padding:13px 14px 11px;}
+.item .ihead .ico{width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:19px;background:rgba(30,110,115,.10);}
+.item .ititle{flex:1;min-width:0;}
+.item .ititle .t{font-weight:700;font-size:15px;color:var(--ink);line-height:1.2;}
+.item .ititle .m{font-size:12px;color:var(--muted);margin-top:3px;}
+.item .ibody{padding:0 14px 13px;}
+.kv{display:flex;gap:8px;font-size:13px;padding:5px 0;border-top:1px dashed var(--line-2);}
+.kv .k{color:var(--muted);min-width:96px;flex:none;font-weight:500;}
+.kv .v{color:var(--ink);font-weight:500;word-break:break-word;}
+.kv .v.mono{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.5px;background:rgba(217,154,78,.14);
+  padding:1px 7px;border-radius:6px;color:var(--amber-d);font-weight:600;}
+.iact{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line-2);background:rgba(246,241,231,.4);}
+.iact button{font-size:12.5px;font-weight:600;color:var(--teal-d);display:inline-flex;align-items:center;gap:5px;}
+.iact button.del{color:var(--terra);margin-left:auto;}
+.iact a{font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;text-decoration:none;}
+.iact svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+/* date group */
+.daygroup{margin-bottom:6px;}
+.dayhead{display:flex;align-items:baseline;gap:9px;margin:14px 2px 9px;}
+.dayhead .dnum{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--teal-d);}
+.dayhead .ddow{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.4px;}
+.dayhead .dcity{margin-left:auto;}
+.tl-time{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;color:var(--amber-d);
+  background:rgba(217,154,78,.13);padding:2px 7px;border-radius:6px;}
+
+/* ---------- Places / map ---------- */
+.filterbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;}
+.filterbar::-webkit-scrollbar{display:none;}
+.fpill{flex:none;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:999px;
+  border:1.5px solid var(--line);color:var(--muted);background:var(--paper);white-space:nowrap;transition:all .15s;}
+.fpill.active{background:var(--teal-d);border-color:var(--teal-d);color:var(--cream);}
+#map{height:280px;border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow);background:#dfe6e4;z-index:1;}
+#mapFallback{display:none;}
+.place{display:flex;gap:11px;align-items:flex-start;padding:12px 14px;background:var(--paper);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:10px;}
+.place .pdot{width:12px;height:12px;border-radius:50%;margin-top:5px;flex:none;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);}
+.place .pmain{flex:1;min-width:0;}
+.place .pn{font-weight:700;font-size:14.5px;}
+.place .pm{font-size:12px;color:var(--muted);margin-top:2px;}
+.place.visited .pn{text-decoration:line-through;opacity:.55;}
+.place .pacts{display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+.place .pacts a,.place .pacts button{font-size:11.5px;font-weight:600;color:var(--teal-d);text-decoration:none;display:flex;gap:4px;align-items:center;}
+
+/* ---------- Tools ---------- */
+.seg{display:flex;background:var(--line-2);border-radius:13px;padding:4px;gap:3px;margin-bottom:16px;}
+.seg button{flex:1;font-size:12.5px;font-weight:600;color:var(--muted);padding:8px 4px;border-radius:10px;transition:all .15s;}
+.seg button.active{background:var(--paper);color:var(--teal-d);box-shadow:var(--shadow);}
+.toolpanel{display:none;}
+.toolpanel.active{display:block;animation:fade .3s ease;}
+
+/* packing */
+.pkcat{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--amber-d);margin:16px 2px 8px;}
+.pkitem{display:flex;align-items:center;gap:11px;padding:11px 13px;background:var(--paper);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);margin-bottom:8px;}
+.pkitem .box{width:22px;height:22px;border-radius:7px;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.pkitem .box svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;}
+.pkitem.done .box{background:var(--ok);border-color:var(--ok);}
+.pkitem.done .box svg{opacity:1;}
+.pkitem.done .pktext{text-decoration:line-through;color:var(--muted);}
+.pkitem .pktext{flex:1;font-size:14px;}
+.pkitem .pkdel{color:var(--terra);opacity:.5;font-size:18px;padding:0 4px;}
+.pkbar{height:8px;border-radius:999px;background:var(--line-2);overflow:hidden;margin:2px 0 4px;}
+.pkbar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--ok));transition:width .4s;}
+
+/* phrasebook */
+.langtabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:12px;}
+.langtabs::-webkit-scrollbar{display:none;}
+.langtab{flex:none;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:7px 13px;border-radius:999px;
+  border:1.5px solid var(--line);background:var(--paper);color:var(--muted);white-space:nowrap;}
+.langtab.active{background:var(--terra);border-color:var(--terra);color:#fff;}
+.phrase{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);
+  border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);margin-bottom:9px;}
+.phrase .en{font-size:12px;color:var(--muted);font-weight:600;}
+.phrase .loc{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:700;color:var(--teal-d);line-height:1.1;margin-top:1px;}
+.phrase .pro{font-size:12px;color:var(--amber-d);font-style:italic;margin-top:2px;}
+.phrase .say{width:40px;height:40px;border-radius:50%;background:rgba(30,110,115,.10);flex:none;display:flex;align-items:center;justify-content:center;}
+.phrase .say svg{width:19px;height:19px;stroke:var(--teal);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+/* weather */
+.wxcard{display:flex;align-items:center;gap:14px;padding:15px 16px;background:var(--paper);border:1px solid var(--line);
+  border-radius:15px;box-shadow:var(--shadow);margin-bottom:11px;}
+.wxcard .wxico{font-size:38px;flex:none;}
+.wxcard .wxmain{flex:1;min-width:0;}
+.wxcard .wxcity{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--teal-d);line-height:1;}
+.wxcard .wxnow{font-size:12.5px;color:var(--muted);margin-top:3px;}
+.wxcard .wxtemp{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:700;color:var(--terra);line-height:1;}
+.wxdays{display:flex;gap:7px;margin-top:10px;}
+.wxday{flex:1;text-align:center;font-size:11px;color:var(--muted);background:rgba(246,241,231,.5);border-radius:9px;padding:6px 2px;}
+.wxday .d{font-weight:700;color:var(--ink);}
+.wxday .e{font-size:17px;margin:2px 0;}
+
+/* currency */
+.fxrow{display:flex;gap:10px;align-items:flex-end;}
+.fxbox{flex:1;}
+.fxbox label{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px;}
+.fxbox .inwrap{display:flex;align-items:center;background:var(--paper);border:1.5px solid var(--line);border-radius:12px;overflow:hidden;}
+.fxbox .inwrap span{padding:0 11px;font-weight:700;color:var(--amber-d);background:rgba(217,154,78,.12);align-self:stretch;display:flex;align-items:center;font-size:13px;}
+.fxbox .inwrap input{flex:1;border:none;outline:none;padding:13px 12px;font-size:18px;font-weight:600;background:transparent;width:100%;color:var(--ink);}
+.fxbox select{width:100%;padding:13px 12px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);font-weight:600;}
+.fxswap{width:42px;height:42px;border-radius:12px;background:var(--teal-d);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;margin-bottom:1px;}
+.fxswap svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.fxnote{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;}
+.fxnote b{color:var(--teal-d);}
+
+/* ---------- Modal sheet ---------- */
+#sheetWrap{position:fixed;inset:0;z-index:60;display:none;}
+#sheetWrap.open{display:block;}
+#sheetBg{position:absolute;inset:0;background:rgba(14,42,51,.5);backdrop-filter:blur(2px);animation:fade .25s;}
+#sheet{position:absolute;left:0;right:0;bottom:0;max-height:92%;background:var(--cream);
+  border-radius:22px 22px 0 0;box-shadow:0 -10px 40px rgba(14,42,51,.3);display:flex;flex-direction:column;
+  padding-bottom:var(--sab);animation:slideup .3s cubic-bezier(.2,.9,.3,1);}
+@keyframes slideup{from{transform:translateY(100%);}to{transform:none;}}
+#sheet .grab{width:40px;height:4px;border-radius:999px;background:var(--line);margin:10px auto 4px;}
+#sheet .shead{display:flex;align-items:center;justify-content:space-between;padding:6px 18px 12px;}
+#sheet .shead h3{font-size:23px;color:var(--teal-d);}
+#sheet .shead .x{font-size:26px;color:var(--muted);line-height:1;padding:4px 6px;}
+#sheetBody{overflow-y:auto;padding:4px 18px 18px;}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--teal-d);margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:11px;
+  background:var(--paper);color:var(--ink);outline:none;transition:border-color .15s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--amber);}
+.field textarea{min-height:74px;resize:vertical;}
+.field.half2{display:flex;gap:11px;}
+.field.half2 > div{flex:1;}
+.field .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+#sheet .btn.full{width:100%;justify-content:center;padding:14px;font-size:15px;margin-top:6px;}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--sab) + 16px);transform:translateX(-50%) translateY(10px);
+  background:var(--teal-d);color:var(--cream);font-size:13px;font-weight:600;padding:11px 18px;border-radius:12px;
+  box-shadow:var(--shadow);z-index:80;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:88%;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.loader{text-align:center;color:var(--muted);font-size:13px;padding:24px;}
+.spin{display:inline-block;width:18px;height:18px;border:2.5px solid var(--line);border-top-color:var(--teal);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-4px;margin-right:8px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.leaflet-popup-content{font-family:'Inter',sans-serif;}
+.leaflet-popup-content b{font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--teal-d);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <svg class="star" viewBox="0 0 24 24" fill="#D99A4E"><path d="M12 1.5l2.2 7.1 7.3.2-5.9 4.3 2.2 7-5.8-4.3-5.8 4.3 2.2-7-5.9-4.3 7.3-.2z"/></svg>
+      <span class="title">Baltic Voyage</span>
+    </div>
+    <span id="countChip">—</span>
+    <span id="offlineDot" title="Offline"></span>
+  </header>
+
+  <main id="view">
+    <!-- TRIP -->
+    <section id="trip" class="section active"></section>
+    <!-- DAYS -->
+    <section id="days" class="section"></section>
+    <!-- HOTELS -->
+    <section id="hotels" class="section"></section>
+    <!-- PLACES -->
+    <section id="places" class="section"></section>
+    <!-- TOOLS -->
+    <section id="tools" class="section"></section>
+  </main>
+
+  <nav id="nav">
+    <button data-tab="trip" class="active"><span class="ndot"></span>
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>Trip</button>
+    <button data-tab="days"><span class="ndot"></span>
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Days</button>
+    <button data-tab="hotels"><span class="ndot"></span>
+      <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 9h0M15 9h0M9 13h0M15 13h0M10 21v-4h4v4"/></svg>Hotels</button>
+    <button data-tab="places"><span class="ndot"></span>
+      <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Places</button>
+    <button data-tab="tools"><span class="ndot"></span>
+      <svg viewBox="0 0 24 24"><path d="M4 7h11M4 12h16M4 17h9"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>Tools</button>
+  </nav>
+</div>
+
+<div id="sheetWrap">
+  <div id="sheetBg"></div>
+  <div id="sheet">
+    <div class="grab"></div>
+    <div class="shead"><h3 id="sheetTitle">Add</h3><button class="x" id="sheetClose">&times;</button></div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Baltic Voyage — single-file travel companion
+   ============================================================ */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const uid = ()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---- Static reference data ---- */
+const CITIES = [
+  {id:'helsinki',name:'Helsinki',country:'Finland', flag:'🇫🇮',lat:60.1699,lng:24.9384,lang:'fi'},
+  {id:'tallinn', name:'Tallinn', country:'Estonia', flag:'🇪🇪',lat:59.4370,lng:24.7536,lang:'et'},
+  {id:'riga',    name:'Riga',    country:'Latvia',  flag:'🇱🇻',lat:56.9496,lng:24.1052,lang:'lv'},
+  {id:'vilnius', name:'Vilnius', country:'Lithuania',flag:'🇱🇹',lat:54.6872,lng:25.2797,lang:'lt'},
+];
+const cityById = id => CITIES.find(c=>c.id===id) || CITIES[0];
+
+const PLACE_CATS = {
+  Sight:  {emoji:'🏛️', color:'#1E6E73'},
+  Food:   {emoji:'🍽️', color:'#C25B3A'},
+  Drink:  {emoji:'☕', color:'#B5793A'},
+  Shop:   {emoji:'🛍️', color:'#7A5BA5'},
+  Nature: {emoji:'🌲', color:'#3E8E62'},
+  Other:  {emoji:'📍', color:'#6E7B78'},
+};
+const PLAN_TYPES = {
+  Sight:{emoji:'🏛️'}, Food:{emoji:'🍽️'}, Transport:{emoji:'🚆'},
+  Activity:{emoji:'🎟️'}, Rest:{emoji:'🛌'}, Other:{emoji:'•'}
+};
+
+const PHRASES = {
+  fi:{name:'Finnish',flag:'🇫🇮',city:'Helsinki',list:[
+    ['Hello','Hei','hay'],['Thank you','Kiitos','KEE-tos'],['Please / Here you go','Ole hyvä','OH-leh HOO-va'],
+    ['Yes','Kyllä','KOOL-la'],['No','Ei','ay'],['Excuse me','Anteeksi','AN-tehk-si'],
+    ['Goodbye','Näkemiin','NA-keh-meen'],['Cheers!','Kippis','KIP-pis'],
+    ['How much is it?','Paljonko se maksaa?','PAL-yon-ko seh MAK-saa'],['Where is…?','Missä on…?','MIS-sa on'],
+    ['The bill, please','Lasku, kiitos','LAS-ku KEE-tos'],["I don't understand",'En ymmärrä','en OOM-mar-ra'],
+    ['Help!','Apua!','AH-poo-ah'],
+  ]},
+  et:{name:'Estonian',flag:'🇪🇪',city:'Tallinn',list:[
+    ['Hello','Tere','TEH-reh'],['Thank you','Aitäh','AI-tah'],['Please / You\'re welcome','Palun','PAH-lun'],
+    ['Yes','Jah','yah'],['No','Ei','ay'],['Excuse me','Vabandust','VAH-ban-dust'],
+    ['Goodbye','Nägemist','NA-geh-mist'],['Cheers!','Terviseks','TEHR-vi-seks'],
+    ['How much is it?','Kui palju see maksab?','kui PAL-yu seh MAK-sab'],['Where is…?','Kus on…?','kus on'],
+    ['The bill, please','Arve, palun','AR-veh PAH-lun'],["I don't understand",'Ma ei saa aru','ma ay saa AH-ru'],
+    ['Help!','Appi!','AP-pi'],
+  ]},
+  lv:{name:'Latvian',flag:'🇱🇻',city:'Riga',list:[
+    ['Hello','Sveiki','SVAY-ki'],['Thank you','Paldies','PAHL-dyes'],['Please / You\'re welcome','Lūdzu','LOO-dzu'],
+    ['Yes','Jā','yah'],['No','Nē','neh'],['Excuse me','Atvainojiet','AT-vai-no-yet'],
+    ['Goodbye','Uz redzēšanos','uz REH-dze-sha-nos'],['Cheers!','Priekā','pree-EH-kah'],
+    ['How much is it?','Cik maksā?','tsik MAK-sah'],['Where is…?','Kur ir…?','kur ir'],
+    ['The bill, please','Rēķinu, lūdzu','REH-ki-nu LOO-dzu'],["I don't understand",'Es nesaprotu','es neh-SAP-ro-tu'],
+    ['Help!','Palīgā!','PAH-lee-gah'],
+  ]},
+  lt:{name:'Lithuanian',flag:'🇱🇹',city:'Vilnius',list:[
+    ['Hello','Labas','LAH-bas'],['Thank you','Ačiū','AH-choo'],['Please / You\'re welcome','Prašau','prah-SHOW'],
+    ['Yes','Taip','tighp'],['No','Ne','neh'],['Excuse me','Atsiprašau','at-si-prah-SHOW'],
+    ['Goodbye','Viso gero','VI-so GEH-ro'],['Cheers!','Į sveikatą','ee svay-KAH-tah'],
+    ['How much is it?','Kiek kainuoja?','kyek kai-NWO-ya'],['Where is…?','Kur yra…?','kur ee-RAH'],
+    ['The bill, please','Sąskaitą, prašau','SAHS-kai-tah prah-SHOW'],["I don't understand",'Nesuprantu','neh-su-PRAN-tu'],
+    ['Help!','Padėkite!','pah-DEH-ki-teh'],
+  ]},
+};
+const SPEAK_LANG = {fi:'fi-FI',et:'et-EE',lv:'lv-LV',lt:'lt-LT'};
+
+const WMO = code=>{
+  const m={0:['Clear','☀️'],1:['Mainly clear','🌤️'],2:['Partly cloudy','⛅'],3:['Overcast','☁️'],
+    45:['Fog','🌫️'],48:['Rime fog','🌫️'],51:['Light drizzle','🌦️'],53:['Drizzle','🌦️'],55:['Heavy drizzle','🌧️'],
+    56:['Freezing drizzle','🌧️'],57:['Freezing drizzle','🌧️'],61:['Light rain','🌦️'],63:['Rain','🌧️'],65:['Heavy rain','🌧️'],
+    66:['Freezing rain','🌧️'],67:['Freezing rain','🌧️'],71:['Light snow','🌨️'],73:['Snow','🌨️'],75:['Heavy snow','❄️'],
+    77:['Snow grains','🌨️'],80:['Showers','🌦️'],81:['Showers','🌧️'],82:['Heavy showers','⛈️'],
+    85:['Snow showers','🌨️'],86:['Snow showers','🌨️'],95:['Thunderstorm','⛈️'],96:['Thunderstorm','⛈️'],99:['Thunderstorm','⛈️']};
+  return m[code]||['—','🌡️'];
+};
+
+/* curated starter pins (editable / deletable) */
+const SEED_PLACES = [
+  ['helsinki','Helsinki Cathedral','Sight',60.1709,24.9525,'Iconic white neoclassical landmark'],
+  ['helsinki','Suomenlinna Sea Fortress','Sight',60.1454,24.9881,'UNESCO island fortress — short ferry ride'],
+  ['helsinki','Old Market Hall','Food',60.1666,24.9554,'Vanha Kauppahalli — salmon soup & treats'],
+  ['helsinki','Temppeliaukio Rock Church','Sight',60.1726,24.9255,'Church carved into solid rock'],
+  ['tallinn','Town Hall Square','Sight',59.4372,24.7453,'Heart of the medieval Old Town'],
+  ['tallinn','Alexander Nevsky Cathedral','Sight',59.4359,24.7397,'Onion-domed cathedral atop Toompea'],
+  ['tallinn','Telliskivi Creative City','Drink',59.4421,24.7330,'Hip district — cafés, street art, food'],
+  ['tallinn','Kadriorg Park & Palace','Nature',59.4380,24.7906,'Baroque palace and gardens'],
+  ['riga','House of the Blackheads','Sight',56.9474,24.1069,'Ornate guild house on Town Hall Square'],
+  ['riga','Riga Central Market','Food',56.9430,24.1144,'Vast market in old Zeppelin hangars'],
+  ['riga','Art Nouveau District','Sight',56.9596,24.1056,'Alberta iela — stunning Jugendstil facades'],
+  ['riga','Freedom Monument','Sight',56.9512,24.1136,'Symbol of Latvian independence'],
+  ['vilnius','Cathedral Square','Sight',54.6858,24.2877,'Grand square with bell tower'],
+  ['vilnius','Gediminas’ Tower','Sight',54.6866,25.2906,'Hilltop views over the Old Town'],
+  ['vilnius','Užupis','Drink',54.6806,25.2956,'Bohemian self-declared "republic"'],
+  ['vilnius','Gate of Dawn','Sight',54.6747,25.2895,'Surviving city gate with a revered chapel'],
+].map(p=>({id:uid(),city:p[0],name:p[1],category:p[2],lat:p[3],lng:p[4],notes:p[5],visited:false}));
+// fix Vilnius cathedral lng typo guard
+SEED_PLACES.forEach(p=>{ if(p.name==='Cathedral Square'){p.lng=25.2877;} });
+
+const SEED_PACKING = [
+  ['Passport / ID','Essentials'],['Phone + charger','Essentials'],['EU plug adapter (Type C/F)','Essentials'],
+  ['Credit & debit cards','Essentials'],['Travel insurance info','Essentials'],['Hotel confirmations (offline)','Essentials'],
+  ['Light rain jacket','Clothing'],['Comfortable walking shoes','Clothing'],['Layers / light sweater','Clothing'],
+  ['Swimwear (sauna & beaches)','Clothing'],['Sunglasses','Clothing'],
+  ['Sunscreen','Health'],['Reusable water bottle','Health'],['Medications','Health'],
+  ['Reusable shopping bag','Extras'],['Power bank','Extras'],['Small umbrella','Extras'],
+].map(p=>({id:uid(),text:p[0],cat:p[1],done:false}));
+
+/* ---- State ---- */
+const KEY='balticVoyage.v1';
+let S = load();
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {
+    meta:{startDate:'',endDate:'',homeCurrency:'USD'},
+    hotels:[], itinerary:[], places:SEED_PLACES, packing:SEED_PACKING,
+    rates:null, seeded:true
+  };
+}
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('Could not save — storage full');} }
+
+/* ---- UI helpers ---- */
+let toastTimer;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+function fmtDate(d,opt){ if(!d) return ''; const dt=new Date(d+'T00:00:00'); if(isNaN(dt)) return d;
+  return dt.toLocaleDateString('en-GB',opt||{day:'numeric',month:'short'}); }
+function dow(d){ const dt=new Date(d+'T00:00:00'); return isNaN(dt)?'':dt.toLocaleDateString('en-GB',{weekday:'long'}); }
+
+/* ---- Navigation ---- */
+let activeTab='trip';
+function go(tab){
+  activeTab=tab;
+  $$('.section').forEach(s=>s.classList.toggle('active',s.id===tab));
+  $$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  $('#view').scrollTop=0;
+  render(tab);
+}
+$$('#nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.tab)));
+
+/* ---- Render dispatch ---- */
+function render(tab){
+  ({trip:renderTrip,days:renderDays,hotels:renderHotels,places:renderPlaces,tools:renderTools}[tab]||(()=>{}))();
+  renderCountdown();
+}
+
+/* ====================== TRIP ====================== */
+function tripDates(){
+  // derive from itinerary + meta
+  let dates=S.itinerary.map(i=>i.date).filter(Boolean).sort();
+  let start=S.meta.startDate||dates[0]||'';
+  let end=S.meta.endDate||dates[dates.length-1]||'';
+  return {start,end};
+}
+function renderCountdown(){
+  const {start,end}=tripDates();
+  const chip=$('#countChip');
+  if(!start){chip.textContent='Set your dates';return;}
+  const today=new Date(); today.setHours(0,0,0,0);
+  const s=new Date(start+'T00:00:00'), e=new Date((end||start)+'T00:00:00');
+  const day=864e5;
+  if(today<s){ const n=Math.round((s-today)/day); chip.textContent=n===0?'Starts today!':`${n} day${n>1?'s':''} to go`; }
+  else if(today<=e){ const d=Math.round((today-s)/day)+1; const tot=Math.round((e-s)/day)+1; chip.textContent=`Day ${d} of ${tot}`; }
+  else chip.textContent='Trip complete ✦';
+}
+function renderTrip(){
+  const {start,end}=tripDates();
+  const today=new Date();today.setHours(0,0,0,0);
+  let cd='';
+  if(start){
+    const s=new Date(start+'T00:00:00');
+    const n=Math.max(0,Math.round((s-today)/864e5));
+    const tot = end? Math.round((new Date(end+'T00:00:00')-s)/864e5)+1 : '—';
+    cd=`<div class="countdown">
+      <div class="cd-box"><b>${today<s?n:'✦'}</b><span>${today<s?'days away':'underway'}</span></div>
+      <div class="cd-box"><b>${tot}</b><span>days</span></div>
+      <div class="cd-box"><b>4</b><span>cities</span></div>
+    </div>`;
+  }
+  const hotelCount=S.hotels.length, planCount=S.itinerary.length, placeCount=S.places.length;
+  const datesLine = start ? `${fmtDate(start)} – ${fmtDate(end||start)}` : 'Tap “Days” to set your dates';
+
+  const cityCards=CITIES.map((c,i)=>{
+    const stays=S.hotels.filter(h=>h.city===c.id).length;
+    const spots=S.places.filter(p=>p.city===c.id).length;
+    return `<div class="citycard"><div class="accent"></div>
+      <div class="ord">${i+1}</div>
+      <div class="ci-main">
+        <div class="ci-name">${c.name}</div>
+        <div class="ci-sub"><span>${c.country}</span>
+          ${stays?`<span class="chip">🏨 ${stays}</span>`:''}
+          ${spots?`<span class="chip amber">📍 ${spots}</span>`:''}
+        </div>
+      </div>
+      <div class="flag">${c.flag}</div>
+    </div>`;
+  }).join('');
+
+  $('#trip').innerHTML=`
+    <div class="hero">
+      <div class="sun"></div>
+      <div class="eyebrow">Summer ${new Date().getFullYear()} · The Baltic Way</div>
+      <h1>Baltic Voyage</h1>
+      <div class="route">Helsinki <span class="arr">→</span> Tallinn <span class="arr">→</span> Riga <span class="arr">→</span> Vilnius</div>
+      ${cd}
+      <svg class="wave" viewBox="0 0 500 40" preserveAspectRatio="none" height="34">
+        <path d="M0 22 C 80 8, 140 36, 230 22 S 400 8, 500 22 L500 40 L0 40 Z" fill="#F6F1E7"/>
+      </svg>
+    </div>
+    <div class="wrap">
+      <div class="quickrow">
+        <div class="stat"><b>${hotelCount}</b><span>Hotels</span></div>
+        <div class="stat"><b>${planCount}</b><span>Plans</span></div>
+        <div class="stat"><b>${placeCount}</b><span>Places</span></div>
+      </div>
+      <div class="minihead">Your Journey</div>
+      <div style="font-size:12.5px;color:var(--muted);margin:-6px 2px 12px;">${esc(datesLine)}</div>
+      ${cityCards}
+      <div class="divider"></div>
+      <div style="text-align:center;color:var(--muted);font-size:12px;padding:4px 0 8px;">
+        ✦ A keepsake for the road ✦<br>All your details stay on this device.
+      </div>
+    </div>`;
+}
+
+/* ====================== DAYS / ITINERARY ====================== */
+function renderDays(){
+  const items=[...S.itinerary].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||'').localeCompare(b.time||''));
+  let body;
+  if(!items.length){
+    body=`<div class="empty"><span class="em-ico">🗺️</span>
+      <p>No plans yet. Build your day-by-day itinerary as the trip takes shape.</p>
+      <button class="btn" onclick="openForm('itinerary')">+ Add a plan</button></div>`;
+  } else {
+    const byDate={};
+    items.forEach(it=>{ (byDate[it.date||'Unscheduled']=byDate[it.date||'Unscheduled']||[]).push(it); });
+    body=Object.keys(byDate).map(date=>{
+      const rows=byDate[date].map(renderPlanCard).join('');
+      const cities=[...new Set(byDate[date].map(i=>i.city))].map(id=>cityById(id).flag).join(' ');
+      const head = date==='Unscheduled'
+        ? `<div class="dayhead"><span class="dnum">Unscheduled</span></div>`
+        : `<div class="dayhead"><span class="dnum">${fmtDate(date,{day:'numeric',month:'long'})}</span>
+            <span class="ddow">${dow(date)}</span><span class="dcity">${cities}</span></div>`;
+      return `<div class="daygroup">${head}${rows}</div>`;
+    }).join('');
+  }
+  $('#days').innerHTML=`<div class="wrap">
+    <div class="sec-head"><div><div class="eyebrow">Itinerary</div><h2>Days</h2>
+      <div class="sub">${items.length} plan${items.length!==1?'s':''} across your trip</div></div>
+      <button class="btn sm" onclick="openForm('itinerary')">+ Plan</button></div>
+    ${body}</div>`;
+}
+function renderPlanCard(it){
+  const c=cityById(it.city); const t=PLAN_TYPES[it.type]||PLAN_TYPES.Other;
+  return `<div class="item">
+    <div class="ihead">
+      <div class="ico">${t.emoji}</div>
+      <div class="ititle"><div class="t">${esc(it.title||'Untitled')}</div>
+        <div class="m">${c.flag} ${esc(c.name)}${it.location?' · '+esc(it.location):''}</div></div>
+      ${it.time?`<span class="tl-time">${esc(it.time)}</span>`:''}
+    </div>
+    ${it.notes?`<div class="ibody"><div class="kv"><span class="v">${esc(it.notes)}</span></div></div>`:''}
+    <div class="iact">
+      <button onclick="openForm('itinerary','${it.id}')">✎ Edit</button>
+      ${it.location?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.location+' '+c.name)}" target="_blank" rel="noopener">↗ Map</a>`:''}
+      <button class="del" onclick="del('itinerary','${it.id}')">🗑 Delete</button>
+    </div>
+  </div>`;
+}
+
+/* ====================== HOTELS ====================== */
+function renderHotels(){
+  const items=[...S.hotels].sort((a,b)=>(a.checkIn||'').localeCompare(b.checkIn||''));
+  let body;
+  if(!items.length){
+    body=`<div class="empty"><span class="em-ico">🏨</span>
+      <p>Add your stays here — check-in, check-out, confirmation numbers, and everything you'll need at the front desk.</p>
+      <button class="btn" onclick="openForm('hotel')">+ Add a hotel</button></div>`;
+  } else {
+    body=items.map(h=>{
+      const c=cityById(h.city);
+      const nights = (h.checkIn&&h.checkOut)? Math.max(0,Math.round((new Date(h.checkOut)-new Date(h.checkIn))/864e5)) : null;
+      return `<div class="item">
+        <div class="ihead">
+          <div class="ico">🏨</div>
+          <div class="ititle"><div class="t">${esc(h.name||'Hotel')}</div>
+            <div class="m">${c.flag} ${esc(c.name)}${nights!=null?` · ${nights} night${nights!==1?'s':''}`:''}</div></div>
+        </div>
+        <div class="ibody">
+          ${h.checkIn?kv('Check-in',`${fmtDate(h.checkIn,{weekday:'short',day:'numeric',month:'short'})}`):''}
+          ${h.checkOut?kv('Check-out',`${fmtDate(h.checkOut,{weekday:'short',day:'numeric',month:'short'})}`):''}
+          ${h.confirmation?kv('Confirmation',`<span class="v mono">${esc(h.confirmation)}</span>`,true):''}
+          ${h.address?kv('Address',esc(h.address)):''}
+          ${h.phone?kv('Phone',`<a href="tel:${esc(h.phone)}">${esc(h.phone)}</a>`,true):''}
+          ${h.price?kv('Price',esc(h.price)):''}
+          ${h.notes?kv('Notes',esc(h.notes)):''}
+        </div>
+        <div class="iact">
+          <button onclick="openForm('hotel','${h.id}')">✎ Edit</button>
+          ${h.address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.address)}" target="_blank" rel="noopener">↗ Directions</a>`:''}
+          ${h.phone?`<a href="tel:${esc(h.phone)}">☎ Call</a>`:''}
+          <button class="del" onclick="del('hotel','${h.id}')">🗑 Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  $('#hotels').innerHTML=`<div class="wrap">
+    <div class="sec-head"><div><div class="eyebrow">Where you'll rest</div><h2>Hotels</h2>
+      <div class="sub">${items.length} stay${items.length!==1?'s':''} saved</div></div>
+      <button class="btn sm" onclick="openForm('hotel')">+ Hotel</button></div>
+    ${body}</div>`;
+}
+function kv(k,v,raw){return `<div class="kv"><span class="k">${k}</span><span class="${raw?'':'v'}">${raw?v:v}</span></div>`;}
+
+/* ====================== PLACES + MAP ====================== */
+let map, markerLayer, mapReady=false, placeFilter='all';
+function renderPlaces(){
+  const counts={all:S.places.length};
+  CITIES.forEach(c=>counts[c.id]=S.places.filter(p=>p.city===c.id).length);
+  const pills=[['all','All places']].concat(CITIES.map(c=>[c.id,c.flag+' '+c.name]))
+    .map(([id,label])=>`<button class="fpill ${placeFilter===id?'active':''}" onclick="setFilter('${id}')">${label}${counts[id]?` (${counts[id]})`:''}</button>`).join('');
+
+  const filtered=S.places.filter(p=>placeFilter==='all'||p.city===placeFilter);
+  let list;
+  if(!filtered.length){
+    list=`<div class="empty"><span class="em-ico">📍</span><p>No places here yet — tap the map or add one.</p>
+      <button class="btn" onclick="openForm('place')">+ Add a place</button></div>`;
+  } else {
+    list=filtered.map(p=>{
+      const cat=PLACE_CATS[p.category]||PLACE_CATS.Other; const c=cityById(p.city);
+      const q=(p.lat&&p.lng)?`${p.lat},${p.lng}`:encodeURIComponent(p.name+' '+c.name);
+      return `<div class="place ${p.visited?'visited':''}">
+        <span class="pdot" style="background:${cat.color}"></span>
+        <div class="pmain"><div class="pn">${cat.emoji} ${esc(p.name)}</div>
+          <div class="pm">${c.flag} ${esc(p.category)}${p.notes?' · '+esc(p.notes):''}</div></div>
+        <div class="pacts">
+          <a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">↗ Go</a>
+          <button onclick="toggleVisited('${p.id}')">${p.visited?'↺ Undo':'✓ Seen'}</button>
+          <button onclick="openForm('place','${p.id}')">✎</button>
+          <button onclick="del('place','${p.id}')" style="color:var(--terra)">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  $('#places').innerHTML=`<div class="wrap">
+    <div class="sec-head"><div><div class="eyebrow">On the ground</div><h2>Places</h2>
+      <div class="sub">Tap the map to drop a pin</div></div>
+      <button class="btn sm" onclick="openForm('place')">+ Place</button></div>
+    <div id="map"></div>
+    <div id="mapFallback" class="empty" style="margin-top:0;"><span class="em-ico">🗺️</span>
+      <p>Map needs an internet connection. Your saved places are listed below and open in your phone's maps app.</p></div>
+    <div class="filterbar">${pills}</div>
+    ${list}</div>`;
+  setTimeout(initMap,60);
+}
+function setFilter(id){placeFilter=id;renderPlaces();}
+function toggleVisited(id){const p=S.places.find(x=>x.id===id);if(p){p.visited=!p.visited;save();renderPlaces();}}
+
+function initMap(){
+  const el=$('#map'); if(!el) return;
+  if(typeof L==='undefined'){ el.style.display='none'; $('#mapFallback').style.display='block'; return; }
+  if(!map){
+    try{
+      map=L.map(el,{zoomControl:true,attributionControl:true}).setView([57.5,24.8],5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+      markerLayer=L.layerGroup().addTo(map);
+      map.on('click',e=>openForm('place',null,{lat:+e.latlng.lat.toFixed(5),lng:+e.latlng.lng.toFixed(5)}));
+      mapReady=true;
+    }catch(e){ el.style.display='none'; $('#mapFallback').style.display='block'; return; }
+  } else { setTimeout(()=>map.invalidateSize(),50); }
+  drawMarkers();
+}
+function drawMarkers(){
+  if(!mapReady||!markerLayer) return;
+  markerLayer.clearLayers();
+  const pts=S.places.filter(p=>(placeFilter==='all'||p.city===placeFilter)&&p.lat&&p.lng);
+  const bounds=[];
+  pts.forEach(p=>{
+    const cat=PLACE_CATS[p.category]||PLACE_CATS.Other; const c=cityById(p.city);
+    const icon=L.divIcon({className:'',html:`<div style="background:${cat.color};width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);font-size:12px;">${cat.emoji}</span></div>`,iconSize:[26,26],iconAnchor:[13,24],popupAnchor:[0,-22]});
+    const m=L.marker([p.lat,p.lng],{icon}).addTo(markerLayer);
+    m.bindPopup(`<b>${esc(p.name)}</b><br>${c.flag} ${esc(p.category)}${p.notes?'<br>'+esc(p.notes):''}<br><a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Open in Maps ↗</a>`);
+    bounds.push([p.lat,p.lng]);
+  });
+  if(bounds.length){ try{map.fitBounds(bounds,{padding:[40,40],maxZoom:13});}catch(e){} }
+}
+
+/* ====================== TOOLS ====================== */
+let toolPanel='packing', phraseLang='fi';
+function renderTools(){
+  $('#tools').innerHTML=`<div class="wrap">
+    <div class="sec-head"><div><div class="eyebrow">Handy on the road</div><h2>Tools</h2></div></div>
+    <div class="seg">
+      ${['packing','phrasebook','weather','currency'].map(p=>`<button class="${toolPanel===p?'active':''}" onclick="setTool('${p}')">${({packing:'🎒 Pack',phrasebook:'💬 Phrases',weather:'⛅ Weather',currency:'💶 Money'})[p]}</button>`).join('')}
+    </div>
+    <div id="tp-packing" class="toolpanel ${toolPanel==='packing'?'active':''}"></div>
+    <div id="tp-phrasebook" class="toolpanel ${toolPanel==='phrasebook'?'active':''}"></div>
+    <div id="tp-weather" class="toolpanel ${toolPanel==='weather'?'active':''}"></div>
+    <div id="tp-currency" class="toolpanel ${toolPanel==='currency'?'active':''}"></div>
+  </div>`;
+  renderPacking(); renderPhrasebook(); renderWeather(); renderCurrency();
+}
+function setTool(p){toolPanel=p;renderTools();}
+
+/* ---- Packing ---- */
+function renderPacking(){
+  const el=$('#tp-packing'); if(!el) return;
+  const done=S.packing.filter(p=>p.done).length, total=S.packing.length;
+  const pct=total?Math.round(done/total*100):0;
+  const cats=[...new Set(S.packing.map(p=>p.cat||'Other'))];
+  const groups=cats.map(cat=>{
+    const rows=S.packing.filter(p=>(p.cat||'Other')===cat).map(p=>`
+      <div class="pkitem ${p.done?'done':''}">
+        <button class="box" onclick="togglePack('${p.id}')"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
+        <span class="pktext" onclick="togglePack('${p.id}')">${esc(p.text)}</span>
+        <button class="pkdel" onclick="del('packing','${p.id}')">×</button>
+      </div>`).join('');
+    return `<div class="pkcat">${esc(cat)}</div>${rows}`;
+  }).join('');
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;color:var(--teal-d);margin-bottom:4px;">
+      <span>${done} of ${total} packed</span><span>${pct}%</span></div>
+    <div class="pkbar"><i style="width:${pct}%"></i></div>
+    ${total?groups:'<div class="empty"><span class="em-ico">🎒</span><p>Your packing list is empty.</p></div>'}
+    <button class="btn ghost" style="width:100%;justify-content:center;margin-top:8px;" onclick="openForm('packing')">+ Add item</button>`;
+}
+function togglePack(id){const p=S.packing.find(x=>x.id===id);if(p){p.done=!p.done;save();renderPacking();}}
+
+/* ---- Phrasebook ---- */
+function renderPhrasebook(){
+  const el=$('#tp-phrasebook'); if(!el) return;
+  const tabs=Object.keys(PHRASES).map(k=>`<button class="langtab ${phraseLang===k?'active':''}" onclick="setLang('${k}')">${PHRASES[k].flag} ${PHRASES[k].name}</button>`).join('');
+  const L0=PHRASES[phraseLang];
+  const rows=L0.list.map(([en,loc,pro])=>`
+    <div class="phrase">
+      <div><div class="en">${esc(en)}</div><div class="loc">${esc(loc)}</div><div class="pro">${esc(pro)}</div></div>
+      <button class="say" onclick="speak('${esc(loc).replace(/'/g,"\\'")}','${phraseLang}')" aria-label="Pronounce">
+        <svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg></button>
+    </div>`).join('');
+  el.innerHTML=`<div class="langtabs">${tabs}</div>
+    <div style="font-size:12px;color:var(--muted);margin:-2px 2px 12px;">Useful phrases for ${esc(L0.city)} · tap 🔊 to hear it</div>
+    ${rows}`;
+}
+function setLang(k){phraseLang=k;renderPhrasebook();}
+function speak(text,lang){
+  if(!('speechSynthesis'in window)){toast('Speech not supported on this device');return;}
+  try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEAK_LANG[lang]||'en';u.rate=.85;speechSynthesis.cancel();speechSynthesis.speak(u);}
+  catch(e){toast('Could not play audio');}
+}
+
+/* ---- Weather ---- */
+let wxCache=null;
+function renderWeather(){
+  const el=$('#tp-weather'); if(!el) return;
+  if(wxCache){ el.innerHTML=wxCache; return; }
+  el.innerHTML=`<div class="loader"><span class="spin"></span>Fetching Baltic skies…</div>`;
+  if(!navigator.onLine){ el.innerHTML=`<div class="empty"><span class="em-ico">📡</span><p>Weather needs an internet connection. Try again when you're online.</p></div>`; return; }
+  const reqs=CITIES.map(c=>
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4`)
+      .then(r=>r.json()).then(d=>({c,d})).catch(()=>({c,d:null})));
+  Promise.all(reqs).then(res=>{
+    const html=res.map(({c,d})=>{
+      if(!d||!d.current) return `<div class="wxcard"><div class="wxico">🌫️</div><div class="wxmain"><div class="wxcity">${c.name}</div><div class="wxnow">Unavailable</div></div></div>`;
+      const [desc,emo]=WMO(d.current.weather_code);
+      const days=(d.daily?.time||[]).slice(0,4).map((t,i)=>{
+        const [,e]=WMO(d.daily.weather_code[i]);
+        const lab=i===0?'Today':new Date(t+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'});
+        return `<div class="wxday"><div class="d">${lab}</div><div class="e">${e}</div>${Math.round(d.daily.temperature_2m_max[i])}°/${Math.round(d.daily.temperature_2m_min[i])}°</div>`;
+      }).join('');
+      return `<div class="wxcard" style="flex-wrap:wrap;">
+        <div class="wxico">${emo}</div>
+        <div class="wxmain"><div class="wxcity">${c.flag} ${c.name}</div><div class="wxnow">${desc}</div></div>
+        <div class="wxtemp">${Math.round(d.current.temperature_2m)}°</div>
+        <div class="wxdays" style="flex-basis:100%;">${days}</div>
+      </div>`;
+    }).join('');
+    wxCache=html+`<div class="fxnote">Live data from Open-Meteo · °C</div>`;
+    if($('#tp-weather'))$('#tp-weather').innerHTML=wxCache;
+  });
+}
+
+/* ---- Currency ---- */
+const CURRENCIES=['USD','GBP','EUR','CAD','AUD','SEK','NOK','DKK','PLN','CHF','JPY'];
+function renderCurrency(){
+  const el=$('#tp-currency'); if(!el) return;
+  const home=S.meta.homeCurrency||'USD';
+  const rateInfo=S.rates && S.rates.rates ? S.rates : null;
+  const rate = rateInfo ? rateInfo.rates[home] : null; // 1 EUR = rate home
+  el.innerHTML=`
+    <div class="card" style="padding:16px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+        🇪🇺 Finland, Estonia, Latvia & Lithuania all use the <b style="color:var(--teal-d)">Euro (€)</b>. Convert from your home currency:
+      </div>
+      <div class="fxrow">
+        <div class="fxbox"><label>Your money</label>
+          <div class="inwrap"><span id="fxHomeSym">${home}</span><input id="fxHome" type="number" inputmode="decimal" placeholder="0" value="100"></div></div>
+        <button class="fxswap" onclick="fxSwap()"><svg viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4"/></svg></button>
+        <div class="fxbox"><label>In euros</label>
+          <div class="inwrap"><span>EUR</span><input id="fxEur" type="number" inputmode="decimal" placeholder="0"></div></div>
+      </div>
+      <div class="field" style="margin-top:14px;">
+        <label>Home currency</label>
+        <select id="fxHomeSel" onchange="setHomeCur(this.value)">${CURRENCIES.map(c=>`<option ${c===home?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div class="fxnote">${rate?`1 € ≈ <b>${rate.toFixed(2)} ${home}</b>`:'Tap “Update rates” when online'} ·
+        ${rateInfo?`updated ${new Date(rateInfo.t).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`:'offline-ready once fetched'}
+        <br><button class="btn ghost sm" style="margin-top:8px;" onclick="fetchRates(true)">↻ Update rates</button></div>
+    </div>`;
+  // wire inputs
+  const fxHome=$('#fxHome'), fxEur=$('#fxEur');
+  function calcFromHome(){ if(!rate){return;} const v=parseFloat(fxHome.value); fxEur.value=isNaN(v)?'':(v/rate).toFixed(2); }
+  function calcFromEur(){ if(!rate){return;} const v=parseFloat(fxEur.value); fxHome.value=isNaN(v)?'':(v*rate).toFixed(2); }
+  fxHome.addEventListener('input',calcFromHome);
+  fxEur.addEventListener('input',calcFromEur);
+  if(rate) calcFromHome(); else { fxEur.placeholder='rates needed'; }
+  if(!rateInfo) fetchRates(false);
+}
+function setHomeCur(c){S.meta.homeCurrency=c;save();renderCurrency();}
+function fxSwap(){ const a=$('#fxHome'),b=$('#fxEur'); const t=a.value; a.value=b.value; b.value=t; a.dispatchEvent(new Event('input')); }
+function fetchRates(manual){
+  if(!navigator.onLine){ if(manual)toast('You appear to be offline'); return; }
+  if(manual)toast('Updating rates…');
+  fetch('https://open.er-api.com/v6/latest/EUR').then(r=>r.json()).then(d=>{
+    if(d&&d.rates){ S.rates={rates:d.rates,t:Date.now()}; save(); if(toolPanel==='currency')renderCurrency(); if(manual)toast('Rates updated'); }
+  }).catch(()=>{ if(manual)toast('Could not fetch rates'); });
+}
+
+/* ====================== FORMS (add / edit) ====================== */
+const FORMS={
+  hotel:{title:'Hotel', icon:'🏨', fields:[
+    {k:'name',l:'Hotel name',req:true,ph:'e.g. Hotel St. Petersbourg'},
+    {k:'city',l:'City',type:'city'},
+    {k:'checkIn',l:'Check-in',type:'date',half:1},
+    {k:'checkOut',l:'Check-out',type:'date',half:1},
+    {k:'confirmation',l:'Confirmation #',ph:'Booking reference'},
+    {k:'address',l:'Address',ph:'Street, district'},
+    {k:'phone',l:'Phone',type:'tel',half:1},
+    {k:'price',l:'Price',ph:'e.g. €420 total',half:1},
+    {k:'notes',l:'Notes',type:'textarea',ph:'Breakfast included, parking, etc.'},
+  ]},
+  itinerary:{title:'Plan', icon:'🗺️', fields:[
+    {k:'title',l:'What',req:true,ph:'e.g. Old Town walking tour'},
+    {k:'date',l:'Date',type:'date',half:1},
+    {k:'time',l:'Time',type:'time',half:1},
+    {k:'city',l:'City',type:'city'},
+    {k:'type',l:'Type',type:'select',opts:Object.keys(PLAN_TYPES)},
+    {k:'location',l:'Location / meeting point',ph:'Address or place name'},
+    {k:'notes',l:'Notes',type:'textarea'},
+  ]},
+  place:{title:'Place', icon:'📍', fields:[
+    {k:'name',l:'Place name',req:true,ph:'e.g. Riga Central Market'},
+    {k:'city',l:'City',type:'city'},
+    {k:'category',l:'Category',type:'select',opts:Object.keys(PLACE_CATS)},
+    {k:'lat',l:'Latitude',type:'number',half:1,ph:'auto from map'},
+    {k:'lng',l:'Longitude',type:'number',half:1,ph:'auto from map'},
+    {k:'notes',l:'Notes',type:'textarea',ph:'Why you want to go'},
+  ]},
+  packing:{title:'Packing item', icon:'🎒', fields:[
+    {k:'text',l:'Item',req:true,ph:'e.g. Rain jacket'},
+    {k:'cat',l:'Category',type:'select',opts:['Essentials','Clothing','Health','Extras']},
+  ]},
+};
+const COLL={hotel:'hotels',itinerary:'itinerary',place:'places',packing:'packing'};
+let editing={type:null,id:null};
+
+function openForm(type,id,prefill){
+  const def=FORMS[type]; if(!def) return;
+  editing={type,id:id||null};
+  const rec = id ? S[COLL[type]].find(x=>x.id===id) : {};
+  const data = Object.assign({}, rec, prefill||{});
+  $('#sheetTitle').textContent=(id?'Edit ':'Add ')+def.title;
+  const fieldHtml = renderFields(def.fields,data);
+  $('#sheetBody').innerHTML=`<form id="theForm">${fieldHtml}
+    <button type="submit" class="btn full">${id?'Save changes':'Add '+def.title.toLowerCase()}</button>
+    ${id?`<button type="button" class="btn ghost full" style="margin-top:8px;color:var(--terra);border-color:#e9c9bd;" onclick="del('${type}','${id}',true)">Delete</button>`:''}
+  </form>`;
+  $('#theForm').addEventListener('submit',submitForm);
+  openSheet();
+  setTimeout(()=>{const f=$('#theForm input,#theForm select,#theForm textarea');if(f&&!prefill)f.focus();},250);
+}
+function renderFields(fields,data){
+  let out='', i=0;
+  while(i<fields.length){
+    const f=fields[i];
+    if(f.half && fields[i+1] && fields[i+1].half){
+      out+=`<div class="field half2"><div>${labelInput(f,data)}</div><div>${labelInput(fields[i+1],data)}</div></div>`;
+      i+=2;
+    } else { out+=`<div class="field">${labelInput(f,data)}</div>`; i++; }
+  }
+  return out;
+}
+function labelInput(f,data){
+  const v=data[f.k]!=null?data[f.k]:'';
+  let inp;
+  if(f.type==='city'){
+    inp=`<select name="${f.k}">${CITIES.map(c=>`<option value="${c.id}" ${v===c.id?'selected':''}>${c.flag} ${c.name}</option>`).join('')}</select>`;
+  } else if(f.type==='select'){
+    inp=`<select name="${f.k}">${f.opts.map(o=>`<option ${v===o?'selected':''}>${o}</option>`).join('')}</select>`;
+  } else if(f.type==='textarea'){
+    inp=`<textarea name="${f.k}" placeholder="${f.ph||''}">${esc(v)}</textarea>`;
+  } else {
+    const t=f.type||'text';
+    inp=`<input name="${f.k}" type="${t}" ${t==='number'?'step="any"':''} placeholder="${f.ph||''}" value="${esc(v)}" ${f.req?'required':''}>`;
+  }
+  return `<label>${f.l}${f.req?' *':''}</label>${inp}`;
+}
+function submitForm(e){
+  e.preventDefault();
+  const {type,id}=editing; const def=FORMS[type];
+  const fd=new FormData(e.target); const obj={};
+  def.fields.forEach(f=>{ let val=fd.get(f.k); if(f.type==='number'&&val!=='') val=parseFloat(val); obj[f.k]=val; });
+  const coll=S[COLL[type]];
+  if(id){ const idx=coll.findIndex(x=>x.id===id); coll[idx]=Object.assign({},coll[idx],obj); }
+  else { obj.id=uid(); if(type==='place'&&obj.visited==null)obj.visited=false; if(type==='packing')obj.done=false; coll.push(obj); }
+  save(); closeSheet(); toast(id?'Saved ✓':def.title+' added ✓');
+  render(activeTab);
+}
+function del(type,id,fromSheet){
+  if(!confirm('Delete this item?')) return;
+  const coll=S[COLL[type]]; const idx=coll.findIndex(x=>x.id===id);
+  if(idx>-1)coll.splice(idx,1);
+  save(); if(fromSheet)closeSheet(); toast('Deleted');
+  render(activeTab);
+}
+
+/* ---- Sheet open/close ---- */
+function openSheet(){$('#sheetWrap').classList.add('open');}
+function closeSheet(){$('#sheetWrap').classList.remove('open');}
+$('#sheetClose').addEventListener('click',closeSheet);
+$('#sheetBg').addEventListener('click',closeSheet);
+
+/* ---- Online/offline ---- */
+function netStatus(){document.body.classList.toggle('offline',!navigator.onLine);}
+window.addEventListener('online',()=>{netStatus();if(toolPanel==='weather'&&activeTab==='tools'){wxCache=null;renderWeather();}});
+window.addEventListener('offline',netStatus);
+netStatus();
+
+/* ---- expose handlers used in inline HTML ---- */
+Object.assign(window,{openForm,del,setFilter,toggleVisited,setTool,togglePack,setLang,speak,setHomeCur,fxSwap,fetchRates});
+
+/* ---- boot ---- */
+go('trip');
+if('serviceWorker'in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+</script>
+</body>
+</html>

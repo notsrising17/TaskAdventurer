@@ -1,0 +1,15 @@
+{
+  "name": "Baltic Voyage",
+  "short_name": "Baltic",
+  "description": "Interactive travel companion for a Helsinki → Tallinn → Riga → Vilnius summer journey.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F1E7",
+  "theme_color": "#12454A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
