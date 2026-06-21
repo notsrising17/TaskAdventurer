@@ -1,0 +1,61 @@
+# Task Adventurer side quests (v1) — TAB-separated, edit in a spreadsheet
+# One drawn per day, optional, gold-only reward, ignored = vanishes silently.
+# rarity: common|rare (rare ≈ 1 day in 7, bigger gold). hook = whimsical display
+# title (ALL CAPS). action = plain instruction a stressed person understands instantly.
+# Evidence base noted in comments per block; keep actions small (<15 min) and binary.
+id	rarity	gold	hook	action
+# — Gratitude & savoring (Seligman three-good-things; Bryant savoring) —
+sq01	common	5	THE SCRIBE'S LEDGER	Write down three things that went well today, and why.
+sq02	rare	12	A COURIER WAITS	Send someone a short message of genuine thanks for something specific.
+sq03	common	5	SAVOR THE PROVISIONS	Eat one meal or snack today with no screen, paying attention to it.
+sq04	common	5	THE BARD'S REQUEST	Listen to a favorite song all the way through, doing nothing else.
+sq05	common	5	SUNSET WATCH	Stop for two minutes and actually look at the sky.
+# — Social connection (Sandstrom & Dunn weak ties; prosocial spending, Dunn) —
+sq06	common	6	WORD ON THE ROAD	Text someone you haven't spoken to in over a month, just to say hi.
+sq07	common	6	THE HERALD'S DECREE	Give one person a genuine, specific compliment today.
+sq08	common	6	AID A FELLOW TRAVELER	Do one small unrequested favor for someone.
+sq09	rare	12	THE GENEROUS PURSE	Spend a few dollars on someone other than yourself today.
+sq10	common	5	GREET THE GATEKEEPER	Have a brief friendly exchange with a stranger or acquaintance.
+# — Movement & nature (attention restoration; movement snacks) —
+sq11	common	6	SCOUT THE PERIMETER	Take a 10-minute walk outside, no destination required.
+sq12	common	5	TOUCH GRASS, LITERALLY	Spend 15 minutes somewhere green or near water.
+sq13	common	5	THE STAIRMASTER'S TRIAL	Take the stairs every time today.
+sq14	common	5	LIMBER UP, ADVENTURER	Stretch for five unhurried minutes.
+# — Mind & order (Pennebaker expressive writing; implementation intentions; clutter/affect) —
+sq15	common	6	NAME THE DRAGON	Write down the thing you're worried about, and one small next step.
+sq16	common	5	CLEAR THE CAMPSITE	Set a 10-minute timer and tidy one small area. Stop when it rings.
+sq17	common	5	THE CARTOGRAPHER'S MINUTE	Sit quietly and follow your breath for three minutes.
+sq18	rare	10	A LETTER TO YOUR FUTURE SELF	Write two sentences to yourself one year from now.
+# — Anticipation & rest (Van Boven anticipation; sleep hygiene) —
+sq19	common	6	PLOT THE NEXT ADVENTURE	Put one thing you'll look forward to on the calendar.
+sq20	common	6	DOUSE THE TORCHES	No screens for the 30 minutes before bed tonight.
+sq21	common	5	FIRST LIGHT RITUAL	Get sunlight and a glass of water within an hour of waking.
+# — Curiosity & growth —
+sq22	common	5	CONSULT THE ARCHIVES	Spend 10 minutes learning about something you're curious about, on purpose.
+sq23	rare	10	THE APPRENTICE'S OATH	Try one small thing today you're slightly bad at.
+# — Gratitude & savoring (cont.) —
+sq24	common	5	THE FEAST REMEMBERED	Recall one good moment from yesterday in as much detail as you can.
+sq25	common	5	TREASURE INVENTORY	Name three ordinary things you own that make life easier, and notice them.
+sq26	rare	12	THE PORTRAIT GALLERY	Look through old photos for five minutes and send one to someone in it.
+# — Social connection (cont.) —
+sq27	common	6	THE LISTENING POST	In your next conversation, ask one follow-up question instead of changing topic.
+sq28	common	5	SIGNAL FIRES	React or reply to a friend's post or message you'd normally just read.
+sq29	rare	12	SUMMON THE COUNCIL	Propose a concrete plan to see a friend — date, time, place.
+# — Movement & nature (cont.) —
+sq30	common	5	THE WANDERING MINSTREL	Walk somewhere today you usually ride or drive.
+sq31	common	5	BEAST OF BURDEN	Carry something heavy with good form — groceries count.
+sq32	common	6	DAWN PATROL	Step outside within 15 minutes of starting your day, even for one minute.
+# — Mind & order (cont.) —
+sq33	common	5	EMPTY THE QUIVER	Write down everything on your mind for five minutes. Don't organize it.
+sq34	common	6	THE QUARTERMASTER'S EYE	Unsubscribe from three emails or mute three accounts that add nothing.
+sq35	common	5	ONE LESS BURDEN	Say no to one small thing today, politely and without explanation.
+sq36	rare	10	THE ORACLE'S QUESTION	Write one sentence: what would make today feel like a win?
+# — Anticipation & rest (cont.) —
+sq37	common	5	THE INNKEEPER'S ORDERS	Set tomorrow's clothes or bag out tonight.
+sq38	common	6	BANK THE COALS	Go to bed 30 minutes earlier than usual tonight.
+sq39	common	5	A MOMENT AT THE HEARTH	Make a hot drink and do nothing else while you drink it.
+# — Curiosity & growth (cont.) —
+sq40	common	5	THE POLYGLOT'S GAMBIT	Learn how to say one new phrase in another language.
+sq41	common	6	MAP UNCHARTED LANDS	Take a different route than usual for any trip today.
+sq42	rare	10	THE GUILD EXAM	Teach someone one thing you know, in under five minutes.
+sq43	common	5	READ THE RUNES	Read 10 pages of any book.

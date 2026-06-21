@@ -1,7 +1,7 @@
 {
   "name": "Task Adventurer",
   "short_name": "TaskAdv",
-  "description": "JRPG-style productivity quest map — march your party by completing real-life tasks",
+  "description": "A weekly expedition powered by your real-life habits.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
