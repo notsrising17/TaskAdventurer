@@ -1,0 +1,41 @@
+# Task Adventurer habit presets (v1). Columns are TAB-separated.
+# domain: work|health|creativity|home|social (mapped to DOMAINS by name at load)
+# goal: times per week. cap: yes = once per day max. sample: yes = eligible for sample campaign.
+domain	goal	cap	sample	name
+work	3	yes	yes	Inbox to zero
+work	5	yes	no	Plan tomorrow's top 3 before logging off
+work	4	no	yes	One focused deep-work block (45 min)
+work	3	no	no	Clear one lingering small task
+work	2	yes	no	Update the project tracker
+work	2	no	no	Send one proactive update
+work	5	yes	no	Close all tabs at end of day
+work	3	no	no	15 minutes of skill learning
+health	4	yes	yes	Move your body 20 minutes
+health	5	yes	no	Walk outside
+health	7	no	yes	Drink a glass of water
+health	4	yes	no	Stretch 5 minutes
+health	4	yes	no	In bed by target time
+health	3	no	no	Cook a real meal
+health	7	yes	no	Take meds and vitamins
+health	3	yes	no	Screen-free wind-down before bed
+creativity	4	yes	yes	Make something for 20 minutes
+creativity	5	no	no	Capture one idea in the notebook
+creativity	1	no	no	Share or publish one thing
+creativity	3	yes	no	Consume something inspiring on purpose
+creativity	4	yes	no	Practice the craft 15 minutes
+creativity	3	no	no	Take one photo worth keeping
+creativity	3	yes	no	Freewrite one page
+home	5	yes	no	Make the bed
+home	4	no	yes	One 10-minute tidy burst
+home	5	yes	no	Dishes done before bed
+home	2	yes	no	Process the mail pile
+home	2	no	no	One load of laundry, start to put-away
+home	2	yes	no	Water the plants
+home	3	no	no	Clear one surface completely
+home	4	no	no	5-minute reset of one room
+social	3	no	yes	Text someone you've been meaning to
+social	1	no	no	Make one real plan (date on calendar)
+social	2	no	no	Call a friend or family member
+social	2	no	no	Reply to the message you've been avoiding
+social	2	no	no	Send a thinking-of-you with zero agenda
+social	1	no	no	Show up to the thing
